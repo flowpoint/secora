@@ -43,7 +43,7 @@ train_data = [InputExample(texts=[s, s]) for s in train_sentences]
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
 ##
-
+'''
 corpus = {}
 dev_queries = {}
 dev_rel_docs = {}
@@ -79,7 +79,7 @@ evaluator = evaluation.InformationRetrievalEvaluator(
 #bp()
 #model.encode(corpus)
 evaluator(model, "./tmp/model_eval",)
-
+'''
 ##
 # Use the denoising auto-encoder loss
 train_loss = losses.MultipleNegativesRankingLoss(model)
@@ -99,8 +99,8 @@ model.save('output/simcse-model')
 ##
 
 # loads_evaluator results
-path = './runs/model_eval/Information-Retrieval_evaluation_results.csv'
-df = pandas.read_csv(path)
+#path = './runs/model_eval/Information-Retrieval_evaluation_results.csv'
+#df = pandas.read_csv(path)
 #df['cos_sim-MRR@5']
 #df['dot_score-MRR@5']
 
