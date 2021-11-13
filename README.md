@@ -1,15 +1,23 @@
-# datascience_project
+# Secora
 
+
+we use pipenv:
+```
 pip install pipenv
+```
 
-setup:
+install all needed packages in the virtual environment:
 ```
 pipenv install
 ```
 
-run:
+open the virtual environment:
 ```
 pipenv shell
+```
+
+run the model with ipython:
+```
 ipython secora/run.py
 ```
 
