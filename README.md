@@ -42,6 +42,7 @@ implementation:
 
 other background information and literature:
 
+- [Retrieval Augmented Coding](https://arxiv.org/pdf/2108.11601.pdf)
 - [benchmark](https://github.com/openai/human-eval)
 - [robustness analysis](https://arxiv.org/pdf/2002.03043.pdf)
 - [collection of ai4code papers](https://github.com/bdqnghi/awesome-ai4code-papers)
