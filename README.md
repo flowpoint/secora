@@ -1,5 +1,18 @@
 # datascience_project
 
+pip install pipenv
+
+setup:
+```
+pipenv install
+```
+
+run:
+```
+pipenv shell
+ipython secora/run.py
+```
+
 we want to apply and evaluate bert on code for information retrieval.
 
 

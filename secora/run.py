@@ -8,9 +8,6 @@ import torch
 import pandas
 import numpy as np
 
-import sys
-sys.environ['HF_HOME'] = './data/'
-
 #import pdb
 #from pdb import set_trace as bp
 
@@ -33,10 +30,11 @@ dataset = load_dataset("code_search_net")
 
 ##
 
-train_set = dataset['train']#.select(range(100))
-validation_set = dataset['validation']#.select(range(10000))
+train_set = dataset['train'].select(range(100))
+validation_set = dataset['validation'].select(range(100))
 
-train_sentences = map(lambda x: x['original_string'], train_set)
+#train_sentences = map(lambda x: x['whole_func_string'], train_set)
+train_sentences = train_set['whole_func_string']
 
 # Convert train sentences to sentence pairs
 train_data = [InputExample(texts=[s, s]) for s in train_sentences]
@@ -61,6 +59,7 @@ for sample in validation_set:
 
     corpus[qid] = ' '.join(sample['code_tokens'])
 
+##
 
 # todo: verify that evaluation is correct
 evaluator = evaluation.InformationRetrievalEvaluator(
@@ -91,8 +90,8 @@ model.fit(
     train_objectives=[(train_dataloader, train_loss)],
     epochs=1,
     show_progress_bar=True,
-    evaluator=evaluator,
-    evaluation_steps=100,
+    #evaluator=evaluator,
+    #evaluation_steps=100,
 )
 
 model.save('output/simcse-model')
@@ -102,7 +101,7 @@ model.save('output/simcse-model')
 # loads_evaluator results
 path = './runs/model_eval/Information-Retrieval_evaluation_results.csv'
 df = pandas.read_csv(path)
-df['cos_sim-MRR@5']
+#df['cos_sim-MRR@5']
 #df['dot_score-MRR@5']
 
 ##
