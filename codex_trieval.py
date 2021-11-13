@@ -8,15 +8,17 @@ import torch
 import pandas
 import numpy as np
 
+import sys
+sys.environ['HF_HOME'] = './data/'
+
 #import pdb
 #from pdb import set_trace as bp
 
 ##
-
 #device = torch.device('cpu')
 
 batch_size = 220
-device = torch.device('cuda')
+device = torch.device('cpu')
 
 # Define your sentence transformer model using CLS pooling
 #model_name = 'distilroberta-base'
@@ -26,7 +28,8 @@ word_embedding_model = models.Transformer(model_name, max_seq_length=32)
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
 model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device)
 
-dataset = load_dataset("code_x_glue_tc_nl_code_search_adv")
+#dataset = load_dataset("code_x_glue_tc_nl_code_search_adv")
+dataset = load_dataset("code_search_net")
 
 ##
 
@@ -76,7 +79,7 @@ evaluator = evaluation.InformationRetrievalEvaluator(
 
 #bp()
 #model.encode(corpus)
-evaluator(model, "/tmp/model_eval",)
+evaluator(model, "./tmp/model_eval",)
 
 ##
 # Use the denoising auto-encoder loss
@@ -97,7 +100,7 @@ model.save('output/simcse-model')
 ##
 
 # loads_evaluator results
-path = '/tmp/model_eval/Information-Retrieval_evaluation_results.csv'
+path = './runs/model_eval/Information-Retrieval_evaluation_results.csv'
 df = pandas.read_csv(path)
 df['cos_sim-MRR@5']
 #df['dot_score-MRR@5']
