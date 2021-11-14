@@ -8,6 +8,7 @@ tensorboard = "*"
 datasets = "*"
 sentence-transformers = "*"
 ipython = "*"
+docopt = "*"
 
 [dev-packages]
 

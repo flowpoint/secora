@@ -1,17 +1,30 @@
 import logging
 
+from dataclasses import dataclass
+from typing import Union
+from enum import Enum
+
 from torch.utils.data import DataLoader
 
 from datasets import load_dataset
 import torch
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+from model import RetrievalModel
+
+from transformers import AutoModel, AutoModelForMaskedLM, AutoModelForPreTraining, AutoTokenizer
+from transformers import PreTrainedModel
+from tokenizers import Tokenizer
 
 #from model import Model
 
+
+@dataclass
 class TrainConfig:
-    def __init__(self, base_model, tokenizer):
-        pass
+    batch_size: int
+    gradient_accum: int
+    lr: int
+
 
 step_limit = 2
 
@@ -35,24 +48,9 @@ valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False)
 logger = logging.getLogger(__name__)
 writer = SummaryWriter()
 
-from transformers import AutoModel, AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-'''
-tokenizer.set_truncation_and_padding(
-        padding_strategy=transformers.file_utils.PaddingStrategy.MAX_LENGTH, 
-        truncation_strategy=transformers.tokenization_utils_base.TruncationStrategy.LONGEST_FIRST, 
-        max_length=32, 
-        stride=1, 
-        pad_to_multiple_of=1)
-'''
-
-model = AutoModel.from_pretrained(model_name)
-
-##
 def train_tokenizer():
     pass
-
 
 def train_model():
     #writer.add_scalar("loss/multiple_negative_ranking", loss, epoch)
@@ -64,8 +62,10 @@ def train_model():
 train_tokenizer()
 train_model()
 
-
+##
 # the bert models have dropout=0.1 by default
+model = RetrievalModel(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 model.train()
 
 similarity = torch.nn.CosineSimilarity(dim=-1)
@@ -75,21 +75,17 @@ optim = torch.optim.Adam(model.parameters())
 ##
 batch = next(iter(train_loader))
 
+
 # train unsupervisedly
 for i in range(10000):
     #for batch in train_loader:
 
     batch_tokens = tokenizer(batch, return_tensors='pt', padding=True, truncation=True)
 
-    out = model(**batch_tokens)
-    out2 = model(**batch_tokens)
+    emb1 = model(**batch_tokens)
+    emb2 = model(**batch_tokens)
 
-    # use the cls output token as embedding vector
-    # todo add the mlp ontop of the vector
-    cls_v = out['last_hidden_state'][:,0,:]
-    cls2_v = out2['last_hidden_state'][:,0,:]
-
-    loss = -(similarity(cls_v, cls2_v).sum())
+    loss = -(similarity(emb1, emb2).mean())
 
     optim.zero_grad()
     loss.backward()

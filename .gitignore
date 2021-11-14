@@ -131,3 +131,4 @@ dmypy.json
 runs
 output
 Pipfile.lock
+resources
