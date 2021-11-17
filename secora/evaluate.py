@@ -3,19 +3,31 @@ import sys
 
 csv.field_size_limit(sys.maxsize)
 
+with open('resources/queries.csv', 'r') as csvfile:
+    reader = csv.DictReader(csvfile)
+    queries = []
+    for row in reader:
+        queries.append(row)
+
 with open('predictions.csv', 'w') as csvfile:
+
     fieldnames = ['language', 'query', 'url']
     cwriter = csv.DictWriter(csvfile,fieldnames)
     cwriter.writeheader()
+    top_k = 10
 
-    for line in reader:
-        q = 'convert int to string'
-        l = 'python'
-        u = 'https://github.com/raphaelm/python-sepaxml/blob/187b699b1673c862002b2bae7e1bd62fe8623aec/sepaxml/utils.py#L64-L76'
+    for query in queries:
+        prediction = model.search(q, top_k)
+        for p in prediction:
+            language = p['language']
+            url = p['language']
 
-        cwriter.writerow(
-            {'language': l,
-                'query': q,
-                'url': u
-            })
+            # prediction is a list of samples
+            predictions.append(prediction)
+
+            cwriter.writerow(
+                {'language': language
+                    'query': query,
+                    'url': url
+                })
 
