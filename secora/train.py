@@ -8,32 +8,24 @@ import torch
 import pandas
 import numpy as np
 
-#import pdb
-#from pdb import set_trace as bp
-
-##
-#device = torch.device('cpu')
 
 batch_size = 220
 device = torch.device('cpu')
 
 # Define your sentence transformer model using CLS pooling
-#model_name = 'distilroberta-base'
 model_name = 'huggingface/CodeBERTa-small-v1'
 
 word_embedding_model = models.Transformer(model_name, max_seq_length=32)
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
 model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device)
 
-#dataset = load_dataset("code_x_glue_tc_nl_code_search_adv")
 dataset = load_dataset("code_search_net")
 
 ##
 
-train_set = dataset['train'].select(range(100))
-validation_set = dataset['validation'].select(range(100))
+train_set = dataset['train']
+validation_set = dataset['validation']
 
-#train_sentences = map(lambda x: x['whole_func_string'], train_set)
 train_sentences = train_set['whole_func_string']
 
 # Convert train sentences to sentence pairs
@@ -42,56 +34,42 @@ train_data = [InputExample(texts=[s, s]) for s in train_sentences]
 # DataLoader to batch your data
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
+eval_log_path = "./runs/model_eval"
+os.makedirs(eval_log_path, exist_ok=True)
+
 ##
-'''
 corpus = {}
 dev_queries = {}
 dev_rel_docs = {}
 
 for sample in validation_set:
-    qid = sample['id']
+    qid = sample['func_code_url']
     pid = qid
-    #dev_queries[qid] = ' '.join(sample['code_tokens'])
-    #dev_rel_docs[qid] = set(' '.join(sample['code_tokens']))
-
-    dev_queries[qid] = ' '.join(sample['docstring_tokens'])
+    dev_queries[qid] = ' '.join(sample['func_documentation_tokens'])
     dev_rel_docs[qid] = set([pid])
+    corpus[qid] = ' '.join(sample['func_code_tokens'])
 
-    corpus[qid] = ' '.join(sample['code_tokens'])
-
-##
-
-# todo: verify that evaluation is correct
 evaluator = evaluation.InformationRetrievalEvaluator(
         dev_queries, 
         corpus, 
         dev_rel_docs, 
-        #mrr_at_k=[10,20,40,50,80,100], 
-        mrr_at_k=range(6), 
+        mrr_at_k=range(1,6), 
         corpus_chunk_size=100000,
-        #ndcg_at_k=range(5),
-        #accuracy_at_k=range(5),
-        #precision_recall_at_k=range(5),
-        #map_at_k=range(5),
+        ndcg_at_k=range(1,6),
         )
-##
 
-#bp()
-#model.encode(corpus)
-evaluator(model, "./tmp/model_eval",)
-'''
+evaluator(model, eval_log_path)
+
 ##
 # Use the denoising auto-encoder loss
 train_loss = losses.MultipleNegativesRankingLoss(model)
 
-# Call the fit method
-# todo: verify that evaluator actually runs
 model.fit(
     train_objectives=[(train_dataloader, train_loss)],
     epochs=1,
     show_progress_bar=True,
-    #evaluator=evaluator,
-    #evaluation_steps=100,
+    evaluator=evaluator,
+    evaluation_steps=100,
 )
 
 model.save('output/simcse-model')
@@ -99,9 +77,9 @@ model.save('output/simcse-model')
 ##
 
 # loads_evaluator results
-#path = './runs/model_eval/Information-Retrieval_evaluation_results.csv'
-#df = pandas.read_csv(path)
-#df['cos_sim-MRR@5']
-#df['dot_score-MRR@5']
+path = os.path.join(eval_log_path, "Information-Retrieval_evaluation_results.csv")
+df = pandas.read_csv(path)
+df['cos_sim-MRR@5']
+df['dot_score-MRR@5']
+df['dot_score-NDCG@5']
 
-##
