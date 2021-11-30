@@ -22,7 +22,9 @@ from tokenizers import Tokenizer
 
 from secora.model import *
 
-dryrun = True
+from tqdm import tqdm
+
+dryrun = False
 step_limit = 2
 batch_size = 2
 
@@ -85,6 +87,8 @@ def tokenize_valid_sample(batch):
 
     url = batch['func_code_url']
 
+    # tokenizer is called twice, so that its impossible to leak data between code and doc
+    # instead of the joint tokenization
     tokenized_code = tokenizer(code, padding=True, truncation=True)
     tokenized_doc = tokenizer(doc, padding=True, truncation=True)
 
@@ -117,12 +121,14 @@ valid_set_tokenized = valid_set.map(
 ##
 # cast dataset to torch tensors
 train_set_tokenized.set_format(type='torch', columns=set(train_set_tokenized.column_names) - {'proc_url'})
-valid_set.set_format(type='torch', columns=set(valid_set.column_names) - {'proc_url'})
+valid_set_tokenized.set_format(type='torch', columns=set(valid_set_tokenized.column_names) - {'proc_url'})
 ##
 
 # create the batched fast dataloader
 # (only possible with same length batches)
 train_loader = DataLoader(train_set_tokenized, batch_size=batch_size, shuffle=True)
+
+# don't shuffle validation set!
 valid_loader = DataLoader(valid_set_tokenized, batch_size=batch_size, shuffle=False, drop_last=True)
 ##
 ##
@@ -138,11 +144,9 @@ def train_shard(
     model.train()
 
     for step, batch in enumerate(train_loader):
-        batch_tokens = tokenizer(batch['whole_func_string'], return_tensors='pt', padding=True, truncation=True)
-
-        input_ids = batch_tokens['input_ids']
-        token_type_ids = batch_tokens['token_type_ids']
-        attention_mask = batch_tokens['attention_mask']
+        input_ids = batch['proc_whole_input_ids']
+        token_type_ids = batch['proc_whole_token_type_ids']
+        attention_mask = batch['proc_whole_attention_mask']
 
         emb1 = model(input_ids, token_type_ids, attention_mask)
         emb2 = model(input_ids, token_type_ids, attention_mask)
@@ -166,47 +170,58 @@ train_shard(
         )
 ##
 def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=batch_size):
-    dataset_shape = (len(valid_loader), embedding_size)
+    dataset_shape = (len(valid_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     code_embedding = np.zeros(dataset_shape, dtype=np.float32)
     doc_embedding = np.zeros(dataset_shape, dtype=np.float32)
 
     model.eval()
-
+    relevant_ids = range(dataset_shape[0])
 
     #build the faiss index
     with torch.no_grad():
-        for i, batch in enumerate(valid_loader):
+        for i, batch in tqdm(enumerate(valid_loader)):
 
-            code_emb = model(input_ids=code_tokens['input_ids'],
-                    token_type_ids=code_tokens['token_type_ids'],
-                    attention_mask=code_tokens['attention_mask'])
+            code_emb = model(input_ids=batch['proc_code_input_ids'],
+                    token_type_ids=batch['proc_code_token_type_ids'],
+                    attention_mask=batch['proc_code_attention_mask'])
 
-            doc_emb = model(input_ids=code_tokens['input_ids'],
-                    token_type_ids=code_tokens['token_type_ids'],
-                    attention_mask=code_tokens['attention_mask'])
+            doc_emb = model(input_ids=batch['proc_doc_input_ids'],
+                    token_type_ids=batch['proc_doc_token_type_ids'],
+                    attention_mask=batch['proc_doc_attention_mask'])
 
-            code_embedding[i*batch_size:i*batch_size+batch_size] = code_emb
-            doc_embedding[i*batch_size:i*batch_size+batch_size] = doc_emb
-
+            code_embedding[i*batch_size:(i+1)*batch_size] = code_emb.detach().numpy()
+            doc_embedding[i*batch_size:(i+1)*batch_size] = doc_emb.detach().numpy()
 
     index = faiss.index_factory(embedding_size, 'Flat')
     index.train(code_embedding)
     index.add(code_embedding)
 
     distances, neighbors = index.search(doc_embedding.astype(np.float32), top_k)
-    return distances, neighbors
+    return distances, neighbors, relevant_ids
 ##
+
+from secora.mrr import mrr
+
 def validate(model, valid_loader, embedding_size=128, top_k=5, batch_size=batch_size):
-    distances, neighbors = k_nearest_neighbors(model, valid_set, embedding_size, top_k, batch_size)
-    valid_set.select(neighbors)
+    distances, neighbors, relevant_ids = k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size)
+
+    neighbors_list = [list(n) for n in neighbors]
+    score = mrr(list(relevant_ids), neighbors_list)
+    print(score)
+    
+    return score
+    '''
+    score = 0
+    for dist, nbs, rid in zip(distances, neighbors, relevant_ids):
+        if rid in nbs:
+            score += 1
+    '''
+
+    #neighsamples = valid_set_tokenized.select(neighbors.flatten())['proc_url']
+    #for dist, s, rid in zip(distances.flatten(), neighsamples)
+    #for k in range(top_k)
+    #valid_set.select(neighbors)
 
 
-distances, neighbors = validate(model, valid_loader, 128, 5)
-##
-import faiss
-import numpy as np
-N = 6000000
-d = 128
-k = 5
-
+score = validate(model, valid_loader, 128, 5)
