@@ -3,6 +3,8 @@ import numpy as np
 
 # my testimplementation of mrr
 def rr(relevant_id: str, ranking: [str]):
+    if relevant_id not in ranking:
+        return 0
     rrank = 1 / (ranking.index(relevant_id)+1)
     return rrank
 

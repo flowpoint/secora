@@ -9,7 +9,7 @@ from abc import ABC
 
 ##
 
-class RetrievalModel(torch.nn.Module):
+class EmbeddingModel(torch.nn.Module):
     def __init__(self, pretrained_name, embedding_size=128):
         super().__init__()
         self.base_model = AutoModelForMaskedLM.from_pretrained(pretrained_name).base_model
@@ -25,7 +25,7 @@ class RetrievalModel(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         x = self.base_model(*args, **kwargs)
-        x = self.pooling(x.last_hidden_state[0,:])
+        x = self.pooling(x.last_hidden_state[:, 0,:])
         x = self.activation(x)
 
         return x
