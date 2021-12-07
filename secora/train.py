@@ -1,4 +1,5 @@
 import logging
+import pdb
 
 from dataclasses import dataclass
 from typing import Union
@@ -9,6 +10,8 @@ import faiss
 import numpy as np
 
 import torch
+import torch.nn.functional as F
+
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
@@ -24,23 +27,27 @@ from secora.model import *
 
 from tqdm import tqdm
 
-dryrun = False
+dryrun = True
 step_limit = 2
-batch_size = 2
+batch_size = 4
+
+lr = 1e-5
+
+shard_steps = 128
+grad_accum = 10
+# temperature/ weighting of cosine sim
+# taken from simcse
+temp = 0.05
 
 embedding_size = 128
 top_k = 5
 
-#max_len = 
-# gradient accum
-# lr
 logdir = './output/logdir'
-
-#model_name = 'huggingface/CodeBERTa-small-v1'
-model_name = 'bert-base-cased'
+model_name = 'huggingface/CodeBERTa-small-v1'
+#model_name = 'bert-base-cased'
 #model_name = 'bert-large-cased'
 
-device = torch.device('cpu')
+device = torch.device('cuda')
 dataset = load_dataset("code_search_net")
 
 def preproc_valid(sample):
@@ -48,8 +55,8 @@ def preproc_valid(sample):
     return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
 
 if dryrun == True:
-    train_set = dataset['train'].select(range(100))
-    valid_set = dataset['validation'].select(range(100)).map(preproc_valid, batched=False)
+    train_set = dataset['train'].select(range(2048))
+    valid_set = dataset['validation'].select(range(2048)).map(preproc_valid, batched=False)
 else:
     train_set = dataset['train']
     valid_set = dataset['validation'].map(preproc_valid, batched=False)
@@ -61,10 +68,12 @@ writer = SummaryWriter()
 ##
 # the bert models have dropout=0.1 by default
 model = EmbeddingModel(model_name)
+model = model.to(device)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 similarity = torch.nn.CosineSimilarity(dim=-1)
-optim = torch.optim.Adam(model.parameters())
+cross_entropy = torch.nn.CrossEntropyLoss()
+optim = torch.optim.Adam(model.parameters(), lr=lr)
 
 # ! important the dummy inputs must be of the right shape (maximal seqlen)
 
@@ -72,7 +81,7 @@ optim = torch.optim.Adam(model.parameters())
 ##
 def tokenize_train_sample(batch):
     whole = batch['whole_func_string']
-    tokenized_code = tokenizer(whole, padding=True, truncation=True)
+    tokenized_code = tokenizer(whole, padding='max_length', truncation=True, return_token_type_ids=True)
     url = batch['func_code_url']
 
     for k, v in tokenized_code.items():
@@ -89,8 +98,8 @@ def tokenize_valid_sample(batch):
 
     # tokenizer is called twice, so that its impossible to leak data between code and doc
     # instead of the joint tokenization
-    tokenized_code = tokenizer(code, padding=True, truncation=True)
-    tokenized_doc = tokenizer(doc, padding=True, truncation=True)
+    tokenized_code = tokenizer(code, padding='max_length', truncation=True, return_token_type_ids=True)
+    tokenized_doc = tokenizer(doc, padding='max_length', truncation=True, return_token_type_ids=True)
 
     for k, v in tokenized_code.items():
         batch['proc_code_'+k] = v
@@ -126,7 +135,7 @@ valid_set_tokenized.set_format(type='torch', columns=set(valid_set_tokenized.col
 
 # create the batched fast dataloader
 # (only possible with same length batches)
-train_loader = DataLoader(train_set_tokenized, batch_size=batch_size, shuffle=True)
+train_loader = DataLoader(train_set_tokenized, batch_size=batch_size, shuffle=True, drop_last=True)
 
 # don't shuffle validation set!
 valid_loader = DataLoader(valid_set_tokenized, batch_size=batch_size, shuffle=False, drop_last=True)
@@ -136,39 +145,43 @@ def train_shard(
     model,
     tokenizer,
     optimizer,
-    similarity,
     train_loader,
     valid_loader,
     ):
 
     model.train()
 
-    for step, batch in enumerate(train_loader):
-        input_ids = batch['proc_whole_input_ids']
-        token_type_ids = batch['proc_whole_token_type_ids']
-        attention_mask = batch['proc_whole_attention_mask']
+    shard_loss = []
 
-        emb1 = model(input_ids, token_type_ids, attention_mask)
-        emb2 = model(input_ids, token_type_ids, attention_mask)
+    try:
+        for step, batch in tqdm(enumerate(train_loader)):
+            for k, v in batch.items():
+                batch[k] = v.to(device)
 
-        loss = -(similarity(emb1, emb2).mean())
+            input_ids = batch['proc_whole_input_ids']
+            token_type_ids = batch['proc_whole_token_type_ids']
+            attention_mask = batch['proc_whole_attention_mask']
 
-        optim.zero_grad()
-        loss.backward()
-        optim.step()
-        print(loss)
+            emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+            emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
 
-        step += 1
-##
-train_shard(
-        model,
-        tokenizer,
-        optim,
-        similarity,
-        train_loader,
-        valid_loader
-        )
-##
+            sim = similarity(emb1, emb2) / temp
+            loss = torch.mean(-torch.log(torch.exp(sim) / torch.exp(sim).sum()))
+            loss.backward()
+
+            shard_loss.append(loss.detach().cpu().numpy())
+
+            if step % grad_accum == grad_accum - 1:
+                optim.step()
+                optim.zero_grad()
+                print(f'shard_loss: {np.mean(shard_loss)}')
+
+            if step % shard_steps == shard_steps -1:
+                break
+
+    except Exception as e:
+        pdb.post_mortem()
+
 def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=batch_size):
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
@@ -178,9 +191,12 @@ def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=b
     model.eval()
     relevant_ids = range(dataset_shape[0])
 
+    simil = []
     #build the faiss index
     with torch.no_grad():
         for i, batch in tqdm(enumerate(valid_loader)):
+            for k, v in batch.items():
+                batch[k] = v.to(device)
 
             code_emb = model(input_ids=batch['proc_code_input_ids'],
                     token_type_ids=batch['proc_code_token_type_ids'],
@@ -189,28 +205,49 @@ def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=b
             doc_emb = model(input_ids=batch['proc_doc_input_ids'],
                     token_type_ids=batch['proc_doc_token_type_ids'],
                     attention_mask=batch['proc_doc_attention_mask'])
+            
+            simil.append(similarity(code_emb, doc_emb).detach().cpu().numpy())
 
-            code_embedding[i*batch_size:(i+1)*batch_size] = code_emb.detach().numpy()
-            doc_embedding[i*batch_size:(i+1)*batch_size] = doc_emb.detach().numpy()
+            code_embedding[i*batch_size:(i+1)*batch_size] = code_emb.detach().cpu().numpy()
+            doc_embedding[i*batch_size:(i+1)*batch_size] = doc_emb.detach().cpu().numpy()
 
     index = faiss.index_factory(embedding_size, 'Flat')
     index.train(code_embedding)
     index.add(code_embedding)
 
     distances, neighbors = index.search(doc_embedding.astype(np.float32), top_k)
+
+    print(f'simil: {np.mean(simil)}')
     return distances, neighbors, relevant_ids
 ##
 
 from secora.mrr import mrr
 
 def validate(model, valid_loader, embedding_size=128, top_k=5, batch_size=batch_size):
-    distances, neighbors, relevant_ids = k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size)
+    distances, neighbors, relevant_ids = k_nearest_neighbors(
+                model, 
+                valid_loader, 
+                embedding_size, 
+                top_k, 
+                batch_size)
 
     neighbors_list = [list(n) for n in neighbors]
     score = mrr(list(relevant_ids), neighbors_list)
-    print(score)
+    print(f'mrr: {score}')
     
     return score
+
+mini_epochs = 16
+for k in range(mini_epochs):
+    train_shard(
+            model,
+            tokenizer,
+            optim,
+            train_loader,
+            valid_loader
+            )
+    score = validate(model, valid_loader, 128, 5)
+
     '''
     score = 0
     for dist, nbs, rid in zip(distances, neighbors, relevant_ids):
@@ -224,4 +261,3 @@ def validate(model, valid_loader, embedding_size=128, top_k=5, batch_size=batch_
     #valid_set.select(neighbors)
 
 
-score = validate(model, valid_loader, 128, 5)

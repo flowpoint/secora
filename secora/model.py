@@ -24,10 +24,10 @@ class EmbeddingModel(torch.nn.Module):
         self.activation = torch.nn.Tanh()
 
     def forward(self, *args, **kwargs):
-        x = self.base_model(*args, **kwargs)
-        x = self.pooling(x.last_hidden_state[:, 0,:])
+        x = self.base_model(*args, **kwargs).last_hidden_state
+        x = x[:, 0, :]
+        x = self.pooling(x)
         x = self.activation(x)
-
         return x
         
 
