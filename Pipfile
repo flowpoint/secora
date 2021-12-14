@@ -5,11 +5,10 @@ name = "pypi"
 
 [packages]
 tensorboard = "*"
+transformers = "*"
 datasets = "*"
-sentence-transformers = "*"
+docopt = "*"
+ray = {extras = ["tune"], version = "*"}
 ipython = "*"
 
 [dev-packages]
-
-[requires]
-python_version = "3.9"

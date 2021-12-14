@@ -128,6 +128,13 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-runs
-output
+runs/
+data/
+
+input/*
+# maybe include input/eval_data/* ?
+# !input/eval_data/
+output/*
 Pipfile.lock
+resources/
+third_party/

@@ -1,10 +1,12 @@
+# this code originates from https://github.com/github/CodeSearchNet/blob/master/src/relevanceeval.py
+
+
 """
-From GitHub Codesearchnet, copied 
-
-
 Usage:
     relevanceeval.py [options] RELEVANCE_ANNOTATIONS_CSV_PATH MODEL_PREDICTIONS_CSV
+
 Standalone relevance evaluation script that outputs evaluation statistics for a set of predictions of a given model.
+
 The input formats of the files is described below.
 The model predictions MODEL_PREDICTIONS_CSV file has the following format:
     A comma-separated file with (at least) the fields and headers "language", "query", "url". Each row represents
@@ -26,7 +28,6 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 from docopt import docopt
-#from dpu_utils.utils import run_and_debug
 
 def load_relevances(filepath: str) -> Dict[str, Dict[str, Dict[str, float]]]:
     relevance_annotations = pd.read_csv(filepath)

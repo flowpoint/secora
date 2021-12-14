@@ -1,30 +1,29 @@
 # Secora
 
+choose your environment:
+- pipenv
+- docker
+- modules
 
-we use pipenv:
+### pipenv
 ```
+# install pipenv:
 pip install pipenv
-```
-
-install all needed packages in the virtual environment:
-```
+# open the virtual environment:
+pipenv shell
+# install the needed packages in the virtual environment:
 pipenv install
 ```
 
-open the virtual environment:
+torch and faiss should be manually installed
+
 ```
-pipenv shell
+# train the model with ipython:
+ipython secora/train.py
 ```
 
-run the model with ipython:
-```
-ipython secora/run.py
-```
-
+# Goals
 we want to apply and evaluate bert on code for information retrieval.
-
-
-goals:
 
 - basically entry on leaderboard, with an information retrieval based model
 - presentation
