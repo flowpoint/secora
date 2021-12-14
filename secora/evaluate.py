@@ -1,6 +1,8 @@
 import csv
 import sys
 
+raise NotImplementedError()
+
 csv.field_size_limit(sys.maxsize)
 
 with open('resources/queries.csv', 'r') as csvfile:
@@ -26,7 +28,7 @@ with open('predictions.csv', 'w') as csvfile:
             predictions.append(prediction)
 
             cwriter.writerow(
-                {'language': language
+                {'language': language,
                     'query': query,
                     'url': url
                 })

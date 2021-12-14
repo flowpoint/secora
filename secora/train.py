@@ -47,7 +47,11 @@ model_name = 'huggingface/CodeBERTa-small-v1'
 #model_name = 'bert-base-cased'
 #model_name = 'bert-large-cased'
 
-device = torch.device('cuda')
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
 dataset = load_dataset("code_search_net")
 
 def preproc_valid(sample):

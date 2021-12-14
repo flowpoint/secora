@@ -1,3 +1,5 @@
+# setup faiss on ubuntu
+
 apt update && apt install 
 
 git clone https://github.com/facebookresearch/faiss

@@ -5,11 +5,15 @@ from transformers import AutoModel, AutoModelForMaskedLM, AutoModelForPreTrainin
 from transformers import PreTrainedModel
 from tokenizers import Tokenizer
 
-from abc import ABC
-
-##
 
 class EmbeddingModel(torch.nn.Module):
+    ''' example:
+        model_name = 'bert-base-cased'
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name)
+        model = EmbeddingModel(model_name)
+        '''
+
     def __init__(self, pretrained_name, embedding_size=128):
         super().__init__()
         self.base_model = AutoModelForMaskedLM.from_pretrained(pretrained_name).base_model
@@ -31,10 +35,4 @@ class EmbeddingModel(torch.nn.Module):
         return x
         
 
-##
-#model_name = 'bert-base-cased'
-#tokenizer = AutoTokenizer.from_pretrained(model_name)
-#model = AutoModel.from_pretrained(model_name)
-##
-#model = RetrievalModel(model_name)
 
