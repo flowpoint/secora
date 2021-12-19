@@ -41,7 +41,7 @@ RUN conda install -c pytorch faiss-cpu
 
 #COPY ./config /root/.ssh/config
 
-RUN pip install tensorboard datasets ipython transformers
+RUN pip install tensorboard datasets ipython transformers ray[tune] docopt
 RUN pip install pipenv
 
 #COPY . /usr/src/buildbot-worker
@@ -50,7 +50,7 @@ RUN pip install pipenv
 #RUN pip3 install /usr/src/buildbot-worker && \
     #chown -R buildbot /buildbot
 
-COPY . /root/secora
+#COPY . /root/secora
 
 WORKDIR /root/secora
 #USER buildbot

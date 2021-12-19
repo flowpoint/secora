@@ -3,7 +3,6 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 
 
-
 def preproc_valid(sample):
     # delete docstring from code samples
     return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
@@ -49,10 +48,12 @@ def get_dataloaders(config):
     dataset = load_dataset("code_search_net")
     if config['dryrun'] == True:
         train_set = dataset['train'].select(range(2048))
-        valid_set = dataset['validation'].select(range(20)).map(preproc_valid, batched=False)
+        valid_set = dataset['validation'].select(range(2048)).map(preproc_valid, batched=False)
     else:
-        train_set = dataset['train']
-        valid_set = dataset['validation'].map(preproc_valid, batched=False)
+        #train_set = dataset['train']
+        #valid_set = dataset['validation'].map(preproc_valid, batched=False)
+        train_set = dataset['train'].filter(lambda x: x['language'] == 'python')
+        valid_set = dataset['validation'].filter(lambda x: x['language'] == 'python').map(preproc_valid, batched=False)
 
 
     # optional:
