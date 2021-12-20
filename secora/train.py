@@ -29,7 +29,7 @@ ray.init(local_mode=True)
 
 config = {}
 # experiment name
-config['name'] = 'test'
+config['name'] = 'proper_run_1'
 config['dryrun'] = False
 config['batch_size'] = 4
 #config['lr'] = 1e-5
@@ -52,7 +52,8 @@ config['model_name'] = 'huggingface/CodeBERTa-small-v1'
 config['lr'] = 1e-5
 #config['momentum'] = tune.uniform(0.1,0.9)
 
-config['finetune_mode'] = 'pooling'
+#config['finetune_mode'] = 'pooling'
+config['finetune_mode'] = 'all'
 ##
 if torch.cuda.is_available():
     config['device'] = torch.device('cuda')
@@ -162,9 +163,10 @@ def train_shard(
                 print(f'shard_loss: {np.mean(shard_loss)}')
                 break
 
-
     except Exception as e:
         pdb.post_mortem()
+
+    return np.mean(shard_loss)
 
 def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=2):
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
@@ -233,9 +235,10 @@ def training_run(config):
 
     train_loader, valid_loader = get_dataloaders(config)
 
-    mini_epochs = 16
+    mini_epochs = 3 * (len(train_loader) // config['shard_steps'])
+
     for k in range(mini_epochs):
-        train_shard(
+        shard_loss = train_shard(
                 model,
                 optim,
                 train_loader,
@@ -247,8 +250,10 @@ def training_run(config):
             path = os.path.join(checkpoint_dir, "checkpoint")
             torch.save((model.state_dict(), optim.state_dict()), path)
 
+        print('validating now')
+
         score = validate(model, valid_loader, config)#128, 5, batch_size=config['batch_size'])
-        tune.report(mrr=score)
+        tune.report(mrr=score, loss=shard_loss)
 
 analysis = tune.run(
         training_run,
