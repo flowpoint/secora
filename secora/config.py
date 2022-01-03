@@ -1,3 +1,4 @@
+
 config = {}
 # experiment name
 config['name'] = 'test10'
@@ -5,7 +6,7 @@ config['dryrun'] = False
 config['batch_size'] = 3
 #config['lr'] = 1e-5
 
-config['shard_steps'] = 4096*4 #2**16
+config['shards'] = 10 #4096*4 #2**16
 config['grad_accum'] = 64 // config['batch_size']
 # temperature/ weighting of cosine sim
 # taken from simcse
@@ -27,3 +28,9 @@ config['lr'] = 1e-5
 #config['finetune_mode'] = 'pooling'
 config['finetune_mode'] = 'all'
 
+config['languages'] = ['python']
+
+config['preprocess_cores'] = 24
+config['preprocess_mode'] = 'concat'
+
+config['max_input_tokens'] = 512

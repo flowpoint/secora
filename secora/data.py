@@ -11,54 +11,60 @@ def preproc_valid(sample):
     return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
 
 
-def tokenize_train_sample(tokenizer, batch):
-    #whole = batch['whole_func_string']
-    # <CODESPLIT> is also used by codebert
-    whole = [a+b+c for a,b,c in zip(batch['func_documentation_string'], cycle(['<CODESPLIT>']),  batch['func_code_string'])]
-    tokenized_code = tokenizer(whole, padding='max_length', truncation=True, return_token_type_ids=True)
-    url = batch['func_code_url']
+def tokenize_train_sample(tokenizer, batch, config):
+    mode = config['preprocess_mode']
+    if mode == 'joint':
+        whole = batch['whole_func_string']
+    elif mode == 'concat':
+        # <CODESPLIT> is also used by codebert
+        whole = [a+b+c for a,b,c in zip(batch['func_documentation_string'], cycle(['<CODESPLIT>']),  batch['func_code_string'])]
+    else:
+        raise RuntimeError(f"preprocess mode: {mode} is not supported")
+
+    tokenized_code = tokenizer(whole, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
+
+    proc_batch = dict()
 
     for k, v in tokenized_code.items():
-        batch['proc_whole_'+k] = v
+        proc_batch[k] = v
 
-    batch['proc_url'] = url
-    return batch
+    return proc_batch
 
 
-def tokenize_valid_sample(tokenizer, batch):
+def tokenize_valid_sample(tokenizer, batch, config):
     code = batch['func_code_string']
     doc = batch['func_documentation_string']
 
-    url = batch['func_code_url']
-
-    # tokenizer is called twice, so that its impossible to leak data between code and doc
+    # call tokenizer twice instead of on a pair, so that its impossible to leak data between code and doc
     # instead of the joint tokenization
-    tokenized_code = tokenizer(code, padding='max_length', truncation=True, return_token_type_ids=True)
-    tokenized_doc = tokenizer(doc, padding='max_length', truncation=True, return_token_type_ids=True)
+    tokenized_code = tokenizer(code, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
+    tokenized_doc = tokenizer(doc, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
+
+    proc_batch = dict()
 
     for k, v in tokenized_code.items():
-        batch['proc_code_'+k] = v
+        proc_batch['code_'+k] = v
 
     for k, v in tokenized_doc.items():
-        batch['proc_doc_'+k] = v
+        proc_batch['doc_'+k] = v
 
-    batch['proc_url'] = url
-
-    return batch
+    return proc_batch
 
 
-def get_dataloaders(config):
+def preprocess_split(split, config):
+    if split not in ["train", "validation"]:
+        raise RuntimeError(f"invalid dataset split: {split}")
+
+
     tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
 
     dataset = load_dataset("code_search_net")
-    if config['dryrun'] == True:
-        train_set = dataset['train'].select(range(256))
-        valid_set = dataset['validation'].select(range(256)).map(preproc_valid, batched=False)
-    else:
-        #train_set = dataset['train']
-        #valid_set = dataset['validation'].map(preproc_valid, batched=False)
-        train_set = dataset['train'].filter(lambda x: x['language'] == 'python')
-        valid_set = dataset['validation'].filter(lambda x: x['language'] == 'python').map(preproc_valid, batched=False)
+    dataset = dataset[split].filter(lambda x: x['language'] in config['languages'], num_proc=config['preprocess_cores'])
+
+    if split == "validation":
+        dataset = dataset.map(preproc_valid, batched=False, num_proc=config['preprocess_cores'])
+
+    dataset = dataset.rename_column("func_code_url", "url")
 
     # optional:
     # write a custom bucketing data collator to remove the need for padding and truncation
@@ -66,27 +72,27 @@ def get_dataloaders(config):
 
     # preprocess tokenize the dataset once
     # by using batched, the tokenizer automatically pads and truncates to the same length
-    train_set_tokenized = train_set.map(
-            lambda x: tokenize_train_sample(tokenizer, x),
-            remove_columns=train_set.column_names,
-            batched=True)
+    if split == "train":
+        def tokenize_fn(x): return tokenize_train_sample(tokenizer, x, config)
+    else:
+        def tokenize_fn(x): return tokenize_valid_sample(tokenizer, x, config)
 
-    valid_set_tokenized = valid_set.map(
-            lambda x: tokenize_valid_sample(tokenizer, x),
-            remove_columns=valid_set.column_names,
-            batched=True)
-    ##
+    dataset = dataset.map(
+            tokenize_fn,
+            remove_columns=set(dataset.column_names) - {'url'},
+            batched=True,
+            num_proc=config['preprocess_cores'])
+
     # cast dataset to torch tensors
-    train_set_tokenized.set_format(type='torch', columns=set(train_set_tokenized.column_names) - {'proc_url'})
-    valid_set_tokenized.set_format(type='torch', columns=set(valid_set_tokenized.column_names) - {'proc_url'})
-    ##
+    dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url'}, output_all_columns=True)
 
     # create the batched fast dataloader
     # (only possible with same length batches)
-    train_loader = DataLoader(train_set_tokenized, batch_size=config['batch_size'], shuffle=True, drop_last=True)
 
-    # don't shuffle validation set!
-    valid_loader = DataLoader(valid_set_tokenized, batch_size=config['batch_size'], shuffle=False, drop_last=True)
+    # but don't shuffle validation set!
+    if split == "train":
+        dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True)
+    else:
+        dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False, drop_last=True)
 
-    return train_loader, valid_loader
-
+    return dataloader

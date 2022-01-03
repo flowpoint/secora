@@ -23,7 +23,7 @@ from ray import tune
 
 from model import *
 from mrr import mrr
-from data import get_dataloaders
+from data import get_dataloaders, preprocess_split
 from config import config
 
 ray.init(local_mode=True)
@@ -38,7 +38,6 @@ def train_shard(
         model,
         optim,
         train_loader,
-        valid_loader,
         config,
         ):
     ''' trains the model for until the budget is exhausted
@@ -48,16 +47,15 @@ def train_shard(
     shard_loss = []
 
     grad_accum = config['grad_accum']
-    shard_steps = config['shard_steps']
 
     try:
         for step, batch in tqdm(enumerate(train_loader)):
             for k, v in batch.items():
                 batch[k] = v.to(config['device'])
 
-            input_ids = batch['proc_whole_input_ids']
-            token_type_ids = batch['proc_whole_token_type_ids']
-            attention_mask = batch['proc_whole_attention_mask']
+            input_ids = batch['input_ids']
+            token_type_ids = batch['token_type_ids']
+            attention_mask = batch['attention_mask']
 
             emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
             emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
@@ -75,16 +73,18 @@ def train_shard(
                 optim.step()
                 optim.zero_grad(set_to_none=True)
 
-            if step % shard_steps == shard_steps - 1:
-                print(f'shard_loss: {np.mean(shard_loss)}')
-                break
-
     except Exception as e:
         pdb.post_mortem()
 
     return np.mean(shard_loss)
 
-def k_nearest_neighbors(model, valid_loader, embedding_size, top_k, batch_size=config['batch_size']):
+def k_nearest_neighbors(
+        model,
+        valid_loader,
+        embedding_size,
+        top_k,
+        batch_size=config['batch_size']):
+
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     code_embedding = np.zeros(dataset_shape, dtype=np.float32)
@@ -157,15 +157,11 @@ def training_run(config, checkpoint_dir=None):
 
     train_loader, valid_loader = get_dataloaders(config)
 
-    # only one unsupervised epoch for now
-    mini_epochs = 1 * (len(train_loader) // config['shard_steps'])
-
-    for k in range(mini_epochs):
+    for k in range(config['shards']):
         shard_loss = train_shard(
                 model,
                 optim,
-                train_loader,
-                valid_loader,
+                train_loader.shard(config['shards'], k),
                 config,
                 )
 
@@ -179,6 +175,7 @@ def training_run(config, checkpoint_dir=None):
         tune.report(mrr=score, loss=shard_loss)
 
 
+'''
 analysis = tune.run(
         training_run,
         config=config,
@@ -193,34 +190,30 @@ analysis = tune.run(
         )
 
 dfs = analysis.trial_dataframes
+'''
 
-
-
-def build_embedding_space(config, batch_size=config['batch_size'], embedding_size=768):
-    model = EmbeddingModel(config['model_name']).half()
-    model = model.to(config['device'])
-    train_loader, valid_loader = get_dataloaders(config)
-
-    dataset_shape = (len(train_loader)*batch_size, embedding_size)
+def build_embedding_space(model, data_loader, config, embedding_size=768):
+    batch_size = data_loader.batch_size
+    dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     joint_embedding = np.zeros(dataset_shape, dtype=np.float32)
 
     model.eval()
 
     with torch.no_grad():
-        for i, batch in tqdm(enumerate(train_loader)):
+        for i, batch in tqdm(enumerate(data_loader)):
             for k, v in batch.items():
                 batch[k] = v.to(config['device'])
 
             if i == 0:
-                model = torch.jit.trace(model.forward, (batch['proc_whole_input_ids'], batch['proc_whole_token_type_ids'],batch['proc_whole_attention_mask']))
+                model = torch.jit.trace(model.forward, (batch['input_ids'], batch['token_type_ids'],batch['attention_mask']))
 
-            joint_emb = model(batch['proc_whole_input_ids'],
-                    batch['proc_whole_token_type_ids'],
-                    batch['proc_whole_attention_mask'])
+            joint_emb = model(batch['input_ids'],
+                    batch['token_type_ids'],
+                    batch['attention_mask'])
 
             joint_embedding[i*batch_size:(i+1)*batch_size] = joint_emb.detach().cpu().numpy()
-        
+
     return joint_embedding
 
 
