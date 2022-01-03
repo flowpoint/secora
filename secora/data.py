@@ -86,13 +86,4 @@ def preprocess_split(split, config):
     # cast dataset to torch tensors
     dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url'}, output_all_columns=True)
 
-    # create the batched fast dataloader
-    # (only possible with same length batches)
-
-    # but don't shuffle validation set!
-    if split == "train":
-        dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True)
-    else:
-        dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False, drop_last=True)
-
-    return dataloader
+    return dataset
