@@ -18,6 +18,8 @@ RUN apt update && apt-get install -y \
     python3-dev \
     libffi-dev \
     libssl-dev \
+    # needed for ray[tune] log sync
+    rsync \
     python3-setuptools \
     python3-pip \
     # Test runs produce a great quantity of dead grandchild processes.  In a

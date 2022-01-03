@@ -10,5 +10,6 @@ datasets = "*"
 docopt = "*"
 ray = {extras = ["tune"], version = "*"}
 ipython = "*"
+dataclasses = "*"
 
 [dev-packages]

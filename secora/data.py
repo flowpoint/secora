@@ -1,6 +1,9 @@
+from itertools import cycle
+
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer
+
 
 
 def preproc_valid(sample):
@@ -9,7 +12,9 @@ def preproc_valid(sample):
 
 
 def tokenize_train_sample(tokenizer, batch):
-    whole = batch['whole_func_string']
+    #whole = batch['whole_func_string']
+    # <CODESPLIT> is also used by codebert
+    whole = [a+b+c for a,b,c in zip(batch['func_documentation_string'], cycle(['<CODESPLIT>']),  batch['func_code_string'])]
     tokenized_code = tokenizer(whole, padding='max_length', truncation=True, return_token_type_ids=True)
     url = batch['func_code_url']
 
@@ -47,14 +52,13 @@ def get_dataloaders(config):
 
     dataset = load_dataset("code_search_net")
     if config['dryrun'] == True:
-        train_set = dataset['train'].select(range(2048))
-        valid_set = dataset['validation'].select(range(2048)).map(preproc_valid, batched=False)
+        train_set = dataset['train'].select(range(256))
+        valid_set = dataset['validation'].select(range(256)).map(preproc_valid, batched=False)
     else:
         #train_set = dataset['train']
         #valid_set = dataset['validation'].map(preproc_valid, batched=False)
         train_set = dataset['train'].filter(lambda x: x['language'] == 'python')
         valid_set = dataset['validation'].filter(lambda x: x['language'] == 'python').map(preproc_valid, batched=False)
-
 
     # optional:
     # write a custom bucketing data collator to remove the need for padding and truncation
@@ -68,8 +72,8 @@ def get_dataloaders(config):
             batched=True)
 
     valid_set_tokenized = valid_set.map(
-            lambda x: tokenize_valid_sample(tokenizer, x), 
-            remove_columns=valid_set.column_names, 
+            lambda x: tokenize_valid_sample(tokenizer, x),
+            remove_columns=valid_set.column_names,
             batched=True)
     ##
     # cast dataset to torch tensors
