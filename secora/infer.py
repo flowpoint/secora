@@ -51,9 +51,8 @@ def k_nearest_neighbors(
 
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
 
-
-    code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=128)
-    doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=128)
+    code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'])
+    doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'])
 
     similarities = F.cosine_similarity(torch.tensor(code_embedding), torch.tensor(doc_embedding)).detach().cpu().numpy()
 
@@ -64,5 +63,4 @@ def k_nearest_neighbors(
 
     distances, neighbors = index.search(doc_embedding.astype(np.float32), top_k)
 
-    print(f'simil: {np.mean(similarities)}')
-    return distances, neighbors 
+    return distances, neighbors, similarities

@@ -18,7 +18,7 @@ config['infer_batch_size'] = 3
 config['epochs'] = 1 #4096*4 #2**16
 config['shards'] = 10 #4096*4 #2**16
 #config['grad_accum'] = 64 // config['batch_size']
-config['grad_accum'] = 1
+config['grad_accum'] = 4
 
 # counted in batches, not in optimizer steps, because of grad_accum
 config['warmup_batches'] = 1

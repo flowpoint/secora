@@ -29,6 +29,8 @@ def train_shard(
         scheduler,
         train_set,
         config,
+        writer,
+        training_state
         ):
     ''' trains the model for until the budget is exhausted
     '''
@@ -67,6 +69,11 @@ def train_shard(
             if step % grad_accum == grad_accum - 1:
                 optim.step()
                 scheduler.step()
+
+                training_state.optimizer_step += 1
+                writer.add_scalar("lr/train", scheduler.get_last_lr()[0], training_state.optimizer_step)
+                writer.flush()
+
                 optim.zero_grad(set_to_none=True)
 
 
@@ -74,15 +81,22 @@ def train_shard(
     except Exception as e:
         pdb.post_mortem()
 
-    return np.mean(shard_loss)
+    avg_loss = np.mean(shard_loss)
+    writer.add_scalar("avg_loss/train", avg_loss)
+    return avg_loss
 
 
 ##
 
-def validate(model, valid_set, config):#embedding_size=128, top_k=5, batch_size=1):
+def validate(
+        model, 
+        valid_set, 
+        config, 
+        writer,
+        training_state):
     relevant_ids = range(len(valid_set))
 
-    distances, neighbors = k_nearest_neighbors(
+    distances, neighbors, cosine_similarities = k_nearest_neighbors(
                 model, 
                 valid_set, 
                 embedding_size=config['embedding_size'], 
@@ -91,6 +105,12 @@ def validate(model, valid_set, config):#embedding_size=128, top_k=5, batch_size=
 
     neighbors_list = [list(n) for n in neighbors]
     score = mrr(list(relevant_ids), neighbors_list)
+
+    i = training_state.optimizer_step
+    writer.add_scalar("mrr/validation", score, i)
+    writer.add_scalar("distances/validation", np.mean(distances), i)
+    writer.add_scalar("cosine_similarity/validation", np.mean(cosine_similarities), i)
+    writer.flush()
     return score
 
 class StateTracker:
@@ -151,22 +171,31 @@ class StateTracker:
         objects = [o.load_state_dict(p) for o,p in zip(self.objects, restored_state)]
         return objects
 
+
 @dataclass
 class TrainingState:
     ''' finished epochs and shards '''
     epoch: int = -1
     shard: int = -1
+    optimizer_step: int = -1
 
     def state_dict(self,):
         return { "epoch": self.epoch, 
-            "shard": self.shard}
+            "shard": self.shard,
+            "optimizer_step": self.optimizer_step
+            }
 
     def load_state_dict(self, state):
         self.epoch = state['epoch']
         self.shard = state['shard']
+        self.optimizer_step = optimizer_step['batch']
+
+
 
 
 def training_run(config, checkpoint_dir=None):
+    writer = SummaryWriter(log_dir=config['name'], flush_secs=30)
+
     model = EmbeddingModel(config['model_name'])
     model = model.to(config['device'])
 
@@ -214,20 +243,18 @@ def training_run(config, checkpoint_dir=None):
                         scheduler,
                         train_set.shard(config['shards'], k),
                         config,
+                        writer,
+                        training_state
                         )
 
                 training_state.shard = k
                 state_tracker.save()
 
-                print("stats:")
-                print(shard_loss)
-                print(scheduler.get_last_lr())
                 print('validating now')
-
-                score = validate(model, valid_set, config)#128, 5, batch_size=config['batch_size'])
-                print(f'mrr score is: {score}')
+                validate(model, valid_set, config, writer, training_state)
                 #tune.report(mrr=score, loss=shard_loss)
-    except KeyboardInterrupt:
+
+    except KeyboardInterrupt as e:
         print('training interrupted')
         pdb.post_mortem()
 
