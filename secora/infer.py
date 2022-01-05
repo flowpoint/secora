@@ -47,7 +47,7 @@ def k_nearest_neighbors(
     batch_size = config['infer_batch_size']
 
     # don't shuffle validation set!
-    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, drop_last=True)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True)
 
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
 
@@ -55,7 +55,7 @@ def k_nearest_neighbors(
     code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=128)
     doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=128)
 
-    similarities = F.cosine_similarity(code_emb, doc_emb).detach().cpu().numpy()
+    similarities = F.cosine_similarity(torch.tensor(code_embedding), torch.tensor(doc_embedding)).detach().cpu().numpy()
 
     #build the faiss index
     index = faiss.index_factory(embedding_size, 'Flat')

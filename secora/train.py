@@ -2,6 +2,7 @@ import os
 import sys
 from time import time
 from math import ceil
+from dataclasses import dataclass
 
 import pdb
 
@@ -12,6 +13,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
+from transformers import get_linear_schedule_with_warmup
 
 from model import *
 from mrr import mrr
@@ -24,6 +26,7 @@ from infer import build_embedding_space, k_nearest_neighbors
 def train_shard(
         model,
         optim,
+        scheduler,
         train_set,
         config,
         ):
@@ -37,7 +40,7 @@ def train_shard(
 
     # create the batched fast dataloader
     # (only possible with same length batches)
-    train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=True, drop_last=True)
+    train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True)
 
     try:
         for step, batch in tqdm(enumerate(train_loader)):
@@ -63,7 +66,10 @@ def train_shard(
 
             if step % grad_accum == grad_accum - 1:
                 optim.step()
+                scheduler.step()
                 optim.zero_grad(set_to_none=True)
+
+
 
     except Exception as e:
         pdb.post_mortem()
@@ -85,11 +91,9 @@ def validate(model, valid_set, config):#embedding_size=128, top_k=5, batch_size=
 
     neighbors_list = [list(n) for n in neighbors]
     score = mrr(list(relevant_ids), neighbors_list)
-    print(f'mrr: {score}')
-
     return score
 
-class ParamTracker:
+class StateTracker:
     def __init__(self, objects, config):
         self.config = config
         if 'checkpoint_dir' not in config.keys():
@@ -102,6 +106,12 @@ class ParamTracker:
         self.checkpoint_dir = config['checkpoint_dir']
         self.max_checkpoints = self.config['max_checkpoints']
 
+        for o in objects:
+            if "state_dict" not in dir(o):
+                raise RuntimeError(f'tracked object: {o} need to have a state_dict() method')
+            if "load_state_dict" not in dir(o):
+                raise RuntimeError(f'tracked object: {o} need to have a load_state_dict() method')
+
         # list of (object, object
         self.objects = objects
 
@@ -111,8 +121,8 @@ class ParamTracker:
     def save(self):
         timestamp = ceil(time())
         path = os.path.join(self.checkpoint_dir, "checkpoint_" + str(timestamp) + ".pt")
-        params = [o.state_dict() for o in self.objects]
-        torch.save(params, path)
+        state = [o.state_dict() for o in self.objects]
+        torch.save(state, path)
 
         # remove oldest checkpoint, through lexicographic order
         checkpoints = self._list_checkpoints()
@@ -137,16 +147,28 @@ class ParamTracker:
         if not os.path.isfile(path):
             raise RuntimeError("checkpoint_doesn't exist, set an existing checkpoint or use '' for the lastest checkpoint")
 
-        restored_params = torch.load(path)
-        objects = [o.load_state_dict(p) for o,p in zip(self.objects, restored_params)]
-        return objects 
+        restored_state = torch.load(path)
+        objects = [o.load_state_dict(p) for o,p in zip(self.objects, restored_state)]
+        return objects
 
+@dataclass
+class TrainingState:
+    ''' finished epochs and shards '''
+    epoch: int = -1
+    shard: int = -1
+
+    def state_dict(self,):
+        return { "epoch": self.epoch, 
+            "shard": self.shard}
+
+    def load_state_dict(self, state):
+        self.epoch = state['epoch']
+        self.shard = state['shard']
 
 
 def training_run(config, checkpoint_dir=None):
     model = EmbeddingModel(config['model_name'])
     model = model.to(config['device'])
-
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
@@ -155,39 +177,65 @@ def training_run(config, checkpoint_dir=None):
     else:
         raise RuntimeError('finetune_mode has to be: all or pooling')
 
-    optim = torch.optim.Adam(params, lr=config['lr'])
-
-    param_tracker = ParamTracker([model, optim], config)
-
-    if checkpoint_dir:
-        model, optim = training_tracker.load()
-
     train_set = preprocess_split('train', config)
     valid_set = preprocess_split('validation', config)
 
     if config['run_type'] == 'debug':
-        train_set = train_set.select(range(1000))
-        valid_set = valid_set.select(range(1000))
+        train_set = train_set.select(range(10*config['grad_accum']*config['batch_size']))
+        valid_set = valid_set.select(range(10*config['grad_accum']*config['batch_size']))
+
+    optim = torch.optim.Adam(params, lr=config['lr'])
+
+    num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
+    num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
+    num_training_steps = config['epochs'] * num_training_steps_per_epoch
+
+    scheduler = get_linear_schedule_with_warmup(
+            optim,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=num_training_steps)
+
+    training_state = TrainingState()
+    state_tracker = StateTracker([model, optim, training_state, scheduler], config)
+
+    if checkpoint_dir:
+        model, optim, training_state, scheduler = training_tracker.load()
 
 
-    for epoch in range(config['epochs']):
-        train_set.shuffle()
+    try:
+        for epoch in range(config['epochs']):
+            training_state.epoch = epoch
+            train_set.shuffle()
 
-        for k in range(config['shards']):
-            shard_loss = train_shard(
-                    model,
-                    optim,
-                    train_set.shard(config['shards'], k),
-                    config,
-                    )
+            for k in range(config['shards']):
+                shard_loss = train_shard(
+                        model,
+                        optim,
+                        scheduler,
+                        train_set.shard(config['shards'], k),
+                        config,
+                        )
 
-            param_tracker.save()
+                training_state.shard = k
+                state_tracker.save()
 
-            print('validating now')
+                print("stats:")
+                print(shard_loss)
+                print(scheduler.get_last_lr())
+                print('validating now')
 
-            score = validate(model, valid_set, config)#128, 5, batch_size=config['batch_size'])
-            print(f'mrr score is: {score}')
-            #tune.report(mrr=score, loss=shard_loss)
+                score = validate(model, valid_set, config)#128, 5, batch_size=config['batch_size'])
+                print(f'mrr score is: {score}')
+                #tune.report(mrr=score, loss=shard_loss)
+    except KeyboardInterrupt:
+        print('training interrupted')
+        pdb.post_mortem()
+
+    # finish the training:
+    
+
+if __name__ == "__main__":
+    training_run(config)
 
 
 #neighsamples = valid_set_tokenized.select(neighbors.flatten())['proc_url']

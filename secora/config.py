@@ -16,8 +16,12 @@ config['infer_batch_size'] = 3
 
 
 config['epochs'] = 1 #4096*4 #2**16
-config['shards'] = 1000 #4096*4 #2**16
-config['grad_accum'] = 64 // config['batch_size']
+config['shards'] = 10 #4096*4 #2**16
+#config['grad_accum'] = 64 // config['batch_size']
+config['grad_accum'] = 1
+
+# counted in batches, not in optimizer steps, because of grad_accum
+config['warmup_batches'] = 1
 # temperature/ weighting of cosine sim
 # taken from simcse
 config['temp'] = 0.05
@@ -42,7 +46,7 @@ config['finetune_mode'] = 'all'
 
 config['languages'] = ['python']
 
-config['preprocess_cores'] = 24
+config['preprocess_cores'] = 10
 config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 512
