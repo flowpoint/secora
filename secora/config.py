@@ -8,17 +8,14 @@ else:
     config['device'] = torch.device('cpu')
 
 # experiment name
-config['name'] = 'test10'
-config['dryrun'] = False
+config['name'] = 'profiling_1'
 config['batch_size'] = 3
 config['infer_batch_size'] = 3
-#config['lr'] = 1e-5
 
-
-config['epochs'] = 1 #4096*4 #2**16
-config['shards'] = 10 #4096*4 #2**16
-#config['grad_accum'] = 64 // config['batch_size']
-config['grad_accum'] = 4
+config['epochs'] = 1
+#config['shards'] = 10 
+config['shards'] = 1 
+config['grad_accum'] = 64 // config['batch_size']
 
 # counted in batches, not in optimizer steps, because of grad_accum
 config['warmup_batches'] = 1
@@ -29,11 +26,13 @@ config['temp'] = 0.05
 config['embedding_size'] = 128
 config['top_k'] = 5
 
+config['logdir'] = './output'
 config['checkpoint_dir'] = './output/runs'
 config['max_checkpoints'] = 1
 
 #config['model_name'] = 'huggingface/CodeBERTa-small-v1'
 config['model_name'] = 'microsoft/codebert-base'
+#config['model_name'] = 'roberta-large'
 #model_name = 'bert-base-cased'
 #model_name = 'bert-large-cased'
 
@@ -51,4 +50,6 @@ config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 512
 
-config['run_type'] = 'debug'
+#config['run_type'] = 'debug'
+config['run_type'] = 'profile'
+config['optim'] = 'adam'

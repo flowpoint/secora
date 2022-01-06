@@ -58,8 +58,11 @@ def preprocess_split(split, config):
 
     tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
 
-    dataset = load_dataset("code_search_net")
-    dataset = dataset[split].filter(lambda x: x['language'] in config['languages'], num_proc=config['preprocess_cores'])
+    dataset = load_dataset("code_search_net")[split]
+    if config['run_type'] in ['debug', 'profile']:
+        dataset = dataset.select(range(2*config['grad_accum']*config['batch_size']))
+
+    dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=config['preprocess_cores'])
 
     if split == "validation":
         dataset = dataset.map(preproc_valid, batched=False, num_proc=config['preprocess_cores'])

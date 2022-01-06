@@ -16,13 +16,9 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
 
     with torch.no_grad():
         for i, batch in tqdm(enumerate(data_loader)):
-            for k, v in batch.items():
-                if isinstance(v, torch.Tensor):
-                    batch[k] = v.to(config['device'])
-
-            input_ids = batch[feature_prefix + 'input_ids']
-            token_type_ids = batch[feature_prefix + 'token_type_ids']
-            attention_mask = batch[feature_prefix + 'attention_mask']
+            input_ids = batch[feature_prefix + 'input_ids'].to(config['device'])
+            token_type_ids = batch[feature_prefix + 'token_type_ids'].to(config['device'])
+            attention_mask = batch[feature_prefix + 'attention_mask'].to(config['device'])
 
             if i == 0:
                 model = torch.jit.trace(model.forward, (input_ids, token_type_ids, attention_mask))

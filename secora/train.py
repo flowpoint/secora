@@ -11,8 +11,11 @@ from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
+
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
+from torch import profiler
+
 from transformers import get_linear_schedule_with_warmup
 
 from model import *
@@ -21,6 +24,22 @@ from data import preprocess_split
 from config import config
 from infer import build_embedding_space, k_nearest_neighbors
 
+from SM3 import SM3
+
+
+def contrastive_loss(model, batch, config):
+    input_ids = batch['input_ids'].to(config['device'], non_blocking=True)
+    token_type_ids = batch['token_type_ids'].to(config['device'], non_blocking=True)
+    attention_mask = batch['attention_mask'].to(config['device'], non_blocking=True)
+
+    emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+
+    # use the exact same loss from the simcse repository
+    sim = F.cosine_similarity(emb1.unsqueeze(1), emb2.unsqueeze(0), dim=-1) / config['temp']
+    labels = torch.arange(sim.size(0), dtype=torch.int64, device=config['device'])
+    loss = F.cross_entropy(sim, labels)
+    return loss
 
 
 def train_shard(
@@ -42,26 +61,12 @@ def train_shard(
 
     # create the batched fast dataloader
     # (only possible with same length batches)
-    train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True)
+    train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=10)
 
     try:
+
         for step, batch in tqdm(enumerate(train_loader)):
-            for k, v in batch.items():
-                if isinstance(v, torch.Tensor):
-                    batch[k] = v.to(config['device'])
-
-            input_ids = batch['input_ids']
-            token_type_ids = batch['token_type_ids']
-            attention_mask = batch['attention_mask']
-
-            emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-            emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-
-            # use the exact same loss from the simcse repository
-            sim = F.cosine_similarity(emb1.unsqueeze(1), emb2.unsqueeze(0), dim=-1) / config['temp']
-            labels = torch.arange(sim.size(0)).long().to(config['device'])
-            loss = F.cross_entropy(sim, labels)
-
+            loss = contrastive_loss(model, batch, config)
             loss.backward()
 
             shard_loss.append(loss.detach().cpu().numpy())
@@ -77,13 +82,68 @@ def train_shard(
                 optim.zero_grad(set_to_none=True)
 
 
-
     except Exception as e:
         pdb.post_mortem()
 
     avg_loss = np.mean(shard_loss)
     writer.add_scalar("avg_loss/train", avg_loss)
     return avg_loss
+
+
+def test_step(model, optim, batch, config):
+    loss = contrastive_loss(model, batch, config)
+    loss.backward()
+
+    s_loss = loss.detach().cpu().numpy()
+
+    optim.step()
+    optim.zero_grad(set_to_none=True)
+
+
+def profile(config):
+    model = EmbeddingModel(config['model_name'])
+    model = model.to(config['device'])
+
+    if config['finetune_mode'] == 'all':
+        params = model.parameters()
+    elif config['finetune_mode'] == 'pooling':
+        params = model.pooling.parameters()
+    else:
+        raise RuntimeError('finetune_mode has to be: all or pooling')
+
+    train_set = preprocess_split('train', config)
+
+    if config['optim'] == 'adam':
+        optim = torch.optim.Adam(params, lr=config['lr'])
+    elif config['optim'] == 'sgd':
+        optim = torch.optim.SGD(params, lr=config['lr'])
+    elif config['optim'] == 'sm3':
+        optim = SM3(params, lr=config['lr'])
+    else:
+        raise RuntimeErroor('config specifies and unsupported optimizer')
+
+    train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=10)
+
+    it = iter(train_loader)
+    test_step(model, optim, next(it), config)
+
+    tensorboard_run_path = os.path.join(config['logdir'], config['name'])
+    trace_path = os.path.join(config['logdir'], config['name'], 'profile_trace.json')
+    stacks_path = os.path.join(config['logdir'], config['name'], 'profile_stacks.txt')
+
+    with profiler.profile(
+            with_stack=True, 
+            profile_memory=True, 
+            record_shapes=True,
+            on_trace_ready=profiler.tensorboard_trace_handler(tensorboard_run_path),
+            activities=[
+                profiler.ProfilerActivity.CPU,
+                profiler.ProfilerActivity.CUDA,
+            ]) as p:
+                test_step(model, optim, next(it), config)
+
+    print(p.key_averages().table(
+        sort_by="self_cuda_time_total", row_limit=-1))
 
 
 ##
@@ -194,7 +254,7 @@ class TrainingState:
 
 
 def training_run(config, checkpoint_dir=None):
-    writer = SummaryWriter(log_dir=config['name'], flush_secs=30)
+    writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     model = EmbeddingModel(config['model_name'])
     model = model.to(config['device'])
@@ -209,11 +269,14 @@ def training_run(config, checkpoint_dir=None):
     train_set = preprocess_split('train', config)
     valid_set = preprocess_split('validation', config)
 
-    if config['run_type'] == 'debug':
-        train_set = train_set.select(range(10*config['grad_accum']*config['batch_size']))
-        valid_set = valid_set.select(range(10*config['grad_accum']*config['batch_size']))
-
-    optim = torch.optim.Adam(params, lr=config['lr'])
+    if config['optim'] == 'adam':
+        optim = torch.optim.Adam(params, lr=config['lr'])
+    elif config['optim'] == 'sgd':
+        optim = torch.optim.SGD(params, lr=config['lr'])
+    elif config['optim'] == 'sm3':
+        optim = SM3(params, lr=config['lr'])
+    else:
+        raise RuntimeErroor('config specifies and unsupported optimizer')
 
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
     num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
@@ -229,7 +292,6 @@ def training_run(config, checkpoint_dir=None):
 
     if checkpoint_dir:
         model, optim, training_state, scheduler = training_tracker.load()
-
 
     try:
         for epoch in range(config['epochs']):
@@ -251,18 +313,21 @@ def training_run(config, checkpoint_dir=None):
                 state_tracker.save()
 
                 print('validating now')
-                validate(model, valid_set, config, writer, training_state)
+                # validate(model, valid_set, config, writer, training_state)
                 #tune.report(mrr=score, loss=shard_loss)
+
 
     except KeyboardInterrupt as e:
         print('training interrupted')
         pdb.post_mortem()
 
-    # finish the training:
-    
 
 if __name__ == "__main__":
-    training_run(config)
+    if config['run_type'] == 'profile':
+        profile(config)
+    else:
+        training_run(config)
+
 
 
 #neighsamples = valid_set_tokenized.select(neighbors.flatten())['proc_url']
