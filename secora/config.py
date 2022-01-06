@@ -14,7 +14,7 @@ config['infer_batch_size'] = 3
 
 config['epochs'] = 1
 #config['shards'] = 10 
-config['shards'] = 1 
+config['shards'] = 10
 config['grad_accum'] = 64 // config['batch_size']
 
 # counted in batches, not in optimizer steps, because of grad_accum
@@ -27,7 +27,7 @@ config['embedding_size'] = 128
 config['top_k'] = 5
 
 config['logdir'] = './output'
-config['checkpoint_dir'] = './output/runs'
+config['checkpoint_dir'] = './output'
 config['max_checkpoints'] = 1
 
 #config['model_name'] = 'huggingface/CodeBERTa-small-v1'
@@ -50,6 +50,13 @@ config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 512
 
-#config['run_type'] = 'debug'
-config['run_type'] = 'profile'
+config['run_type'] = 'debug'
+#config['run_type'] = 'profile'
+#config['run_type'] = 'default'
+
 config['optim'] = 'adam'
+
+# set to No
+#config['grad_clip'] = 1.0
+
+config['precision'] = 'mixed'
