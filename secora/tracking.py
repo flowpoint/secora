@@ -2,13 +2,16 @@ from math import ceil
 from time import time
 import os
 from dataclasses import dataclass
+import logging
 
 import torch
+
 
 
 class StateTracker:
     def __init__(self, config, **kwargs):
         self.config = config
+
         if 'checkpoint_dir' not in config.keys():
             raise RuntimeError('config needs to have a checkpoint_dir')
         if 'max_checkpoints' not in config.keys():
@@ -16,7 +19,7 @@ class StateTracker:
         if not config['max_checkpoints'] >= 1:
             raise RuntimeError('max_checkpoints has to be greater than 1')
 
-        self.checkpoint_dir = config['checkpoint_dir']
+        self.checkpoint_dir = os.path.join(config['checkpoint_dir'], config['name'])
         self.max_checkpoints = self.config['max_checkpoints']
 
         for o in kwargs.values():
@@ -34,9 +37,13 @@ class StateTracker:
         return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.checkpoint_dir)))
 
     def save(self):
+        logger = logging.getLogger('train')
+
         timestamp = ceil(time())
         path = os.path.join(self.checkpoint_dir, "checkpoint_" + str(timestamp) + ".pt")
         state = [o.state_dict() for o in self.objects.values()]
+
+        logger.info(f'saving state to {path}')
         torch.save(state, path)
 
         # remove oldest checkpoint, through lexicographic order
@@ -44,16 +51,23 @@ class StateTracker:
 
         if len(checkpoints) > self.max_checkpoints:
             old_path = os.path.join(self.checkpoint_dir, sorted(checkpoints)[0])
+            logger.info(f'removing old checkpoint: {old_path}')
             os.remove(old_path)
 
     def load_latest(self):
+        logger = logging.getLogger('train')
+
         existing_checkpoints = sorted(self._list_checkpoints())
         if len(existing_checkpoints) < 1:
-            print('no checkpoints available, not loading anything')
-            return
+            logger.info('no checkpoints available, not loading anything')
+            return 
+
+        logger.info(f'found checkpoints in {self.checkpoint_dir}:\n{existing_checkpoints}')
 
         checkpoint = existing_checkpoints[-1]
         path = os.path.join(self.checkpoint_dir, checkpoint)
+
+        logger.info(f'restoring: {path}')
 
         if not os.path.isfile(path):
             raise RuntimeError(f"checkpoint {path} doesn't exist")
@@ -62,14 +76,11 @@ class StateTracker:
         for o,p in zip(self.objects.values(), restored_state):
             o.load_state_dict(p)
 
-        return self.objects.values()
-
-
 @dataclass
 class TrainingProgress:
     ''' epochs and shards that have been begun'''
     # epoch -1 means warmup
-    epoch: int = -1
+    epoch: int = 0
     shard: int = 0 
     optimizer_step: int = -1
 

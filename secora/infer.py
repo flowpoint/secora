@@ -14,8 +14,10 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
 
     model.eval()
 
+    bar = tqdm(total=len(data_loader), unit=' batch', desc=f'building embeddings: {feature_prefix}', smoothing=0.03)
+
     with torch.no_grad():
-        for i, batch in tqdm(enumerate(data_loader)):
+        for i, batch in enumerate(data_loader):
             input_ids = batch[feature_prefix + 'input_ids'].to(config['device'])
             token_type_ids = batch[feature_prefix + 'token_type_ids'].to(config['device'])
             attention_mask = batch[feature_prefix + 'attention_mask'].to(config['device'])
@@ -29,6 +31,7 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
                     attention_mask)
 
             embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach().cpu().numpy()
+            bar.update(n=1)
 
     return embedding_space
 

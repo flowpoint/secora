@@ -8,17 +8,17 @@ else:
     config['device'] = torch.device('cpu')
 
 # experiment name
-config['name'] = 'profiling_1'
-config['batch_size'] = 3
-config['infer_batch_size'] = 3
+config['name'] = 'default_4'
+config['batch_size'] = 8
+config['infer_batch_size'] = 8
 
 config['epochs'] = 1
 #config['shards'] = 10 
-config['shards'] = 10
+config['shards'] = 20 
 config['grad_accum'] = 64 // config['batch_size']
 
 # counted in batches, not in optimizer steps, because of grad_accum
-config['warmup_batches'] = 1
+config['warmup_batches'] = 10000
 # temperature/ weighting of cosine sim
 # taken from simcse
 config['temp'] = 0.05
@@ -28,7 +28,7 @@ config['top_k'] = 5
 
 config['logdir'] = './output'
 config['checkpoint_dir'] = './output'
-config['max_checkpoints'] = 1
+config['max_checkpoints'] = 30
 
 #config['model_name'] = 'huggingface/CodeBERTa-small-v1'
 config['model_name'] = 'microsoft/codebert-base'
@@ -48,11 +48,11 @@ config['languages'] = ['python']
 config['preprocess_cores'] = 10
 config['preprocess_mode'] = 'concat'
 
-config['max_input_tokens'] = 512
+config['max_input_tokens'] = 256
 
-config['run_type'] = 'debug'
+#config['run_type'] = 'debug'
 #config['run_type'] = 'profile'
-#config['run_type'] = 'default'
+config['run_type'] = 'default'
 
 config['optim'] = 'adam'
 

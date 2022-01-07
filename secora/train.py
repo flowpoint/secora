@@ -1,6 +1,9 @@
 import os
 import sys
+
+import time
 from time import time
+
 from math import ceil
 from dataclasses import dataclass
 import argparse
@@ -30,7 +33,7 @@ from tracking import *
 
 from SM3 import SM3
 
-
+import logging
 
 def train_shard(
         state_tracker,
@@ -64,12 +67,14 @@ def train_shard(
             prefetch_factor=10)
 
     try:
-
-        for step, batch in tqdm(enumerate(train_loader)):
+        bar = tqdm(total=len(train_loader), unit=' batch', desc='train_shard', smoothing=0.03)
+        for step, batch in enumerate(train_loader):
             loss = scaler.scale(contrastive_loss(model, batch, config))
             loss.backward()
 
             shard_loss.add_(loss.detach())
+
+            bar.update(n=1)
 
             if step % grad_accum == grad_accum - 1:
                 #gradient clipping
@@ -97,12 +102,12 @@ def train_shard(
 
 
     except Exception as e:
-        print(e)
+        logger.exception(e)
         if config['run_type'] == 'debug':
             pdb.post_mortem()
 
     avg_loss = (shard_loss/step).cpu().numpy()
-    writer.add_scalar("avg_loss/train", avg_loss)
+    writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
 
 
 def validate(
@@ -131,6 +136,7 @@ def validate(
 
 
 def train(config):
+    logger = logging.getLogger('train')
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     model = EmbeddingModel(config)
@@ -150,10 +156,12 @@ def train(config):
     elif config['optim'] == 'sm3':
         optim = SM3(params, lr=config['lr'])
     else:
-        raise RuntimeError('config specifies and unsupported optimizer')
+        raise RuntimeError('config specifies an unsupported optimizer')
 
     train_set = preprocess_split('train', config)
     valid_set = preprocess_split('validation', config)
+    # scroll screen
+    print("\n"*8)
 
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
     num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
@@ -175,36 +183,30 @@ def train(config):
             scaler=scaler,
             training_progress=training_progress)
 
+    # load latest checkpoint 
     state_tracker.load_latest()
 
     if config['run_type'] == 'debug':
         num_epochs = 2
         num_shards = 2
+        training_progress.epoch = 0
+        training_progress.shard = 0
     else:
         num_epochs = config['epochs']
         num_shards = config['shards']
 
+    logger.info(f'shard_size: (len(train_set)/num_shards) samples')
+    logger.info(f'validation set size: (len(valid_set)) samples')
 
     try:
-        # warmup
-        print('warmup')
-        while(training_progress.optimizer_step < num_warmup_steps):
-            train_shard(
-                state_tracker,
-                train_set,
-                config,
-                writer,
-                )
-
-        training_progress.epoch = 0
-
         # training
-        print('starting training')
+        logger.info('starting training')
         while(training_progress.epoch < num_epochs):
+            logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
             train_set.shuffle()
 
             while(training_progress.shard < num_shards):
-                print('training shard')
+                logger.info('training shard')
                 train_shard(
                     state_tracker,
                     train_set.shard(num_shards, training_progress.shard),
@@ -216,7 +218,7 @@ def train(config):
                     state_tracker.save()
 
                 if config['run_type'] in ['default', 'debug']:
-                    print('validating shard')
+                    logger.info('validating shard')
                     validate(state_tracker['model'], 
                             valid_set, 
                             config, 
@@ -229,23 +231,52 @@ def train(config):
 
 
     except KeyboardInterrupt as e:
-        print('training interrupted')
+        state_tracker.save()
+        logger.info('training interrupted')
     except Exception as e:
-        print(e)
+        logger.exception(e)
         if config['run_type'] == 'debug':
             pdb.post_mortem()
+
+def make_logger(config):
+    if config['run_type'] == 'debug':
+        level = logging.DEBUG
+    else: 
+        level = logging.INFO
+
+    logger = logging.getLogger('train')
+    logger.setLevel(level)
+
+    path = os.path.join(config['logdir'], config['name'], 'run.log')
+
+    fh = logging.FileHandler(path)
+    ch = logging.StreamHandler()
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
     parser.add_argument('--config', type=str)
     args = parser.parse_args()
 
+    logdir = os.path.join(config['logdir'], config['name'])
+    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+    os.makedirs(logdir, exist_ok=True)
+    os.makedirs(checkdir, exist_ok=True)
+
+    make_logger(config)
+
     if config['run_type'] == 'profile':
         profile(config)
     else:
         train(config)
-        print('training_successful')
-
 
 #neighsamples = valid_set_tokenized.select(neighbors.flatten())['proc_url']
 #for dist, s, rid in zip(distances.flatten(), neighsamples)
