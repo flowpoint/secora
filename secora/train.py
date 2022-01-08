@@ -44,6 +44,7 @@ def train_shard(
     ''' trains the model for until the budget is exhausted
     '''
 
+    logger = logging.getLogger('train')
 
     model = state_tracker['model']
     optim = state_tracker['optim']

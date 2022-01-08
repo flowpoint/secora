@@ -8,8 +8,9 @@ tensorboard = "*"
 transformers = "*"
 datasets = "*"
 docopt = "*"
-ray = {extras = ["tune"], version = "*"}
 ipython = "*"
 dataclasses = "*"
+faiss-cpu = "*"
+torch-sm3 = "*"
 
 [dev-packages]
