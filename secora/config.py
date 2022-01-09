@@ -7,12 +7,12 @@ if torch.cuda.is_available():
 else:
     config['device'] = torch.device('cpu')
 
-#config['device'] = torch.device('cpu')
-
 # experiment name
-config['name'] = 'cpu_test'
+config['name'] = 'gpu_profiling3'
 config['batch_size'] = 8
 config['infer_batch_size'] = 8
+
+config['seed'] = 42
 
 config['epochs'] = 1
 #config['shards'] = 10 
@@ -31,8 +31,8 @@ config['top_k'] = 5
 #config['logdir'] = './output'
 #config['checkpoint_dir'] = './output'
 
-config['logdir'] = '/tmp/output'
-config['checkpoint_dir'] = '/tmp/output'
+config['logdir'] = './output'
+config['checkpoint_dir'] = './output'
 
 config['max_checkpoints'] = 30
 
@@ -56,8 +56,8 @@ config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 256
 
-config['run_type'] = 'debug'
-#config['run_type'] = 'profile'
+#config['run_type'] = 'debug'
+config['run_type'] = 'profile'
 #config['run_type'] = 'default'
 
 config['optim'] = 'adam'
@@ -67,5 +67,5 @@ config['optim'] = 'adam'
 
 config['precision'] = 'mixed'
 
-if config['precision'] == 'mixed' and config['device'] != 'cpu':
+if config['precision'] == 'mixed' and config['device'] == 'cpu':
     raise RuntimeError('cant use cuda amp mixed on cpu')

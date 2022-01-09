@@ -65,7 +65,7 @@ def train_shard(
             pin_memory=True, 
             num_workers=4, 
             persistent_workers=True, 
-            prefetch_factor=10)
+            prefetch_factor=4)
 
     try:
         bar = tqdm(total=len(train_loader), unit=' batch', desc='train_shard', smoothing=0.03)
@@ -196,8 +196,11 @@ def train(config):
         num_epochs = config['epochs']
         num_shards = config['shards']
 
-    logger.info(f'shard_size: (len(train_set)/num_shards) samples')
-    logger.info(f'validation set size: (len(valid_set)) samples')
+    shard_size = len(train_set)/num_shards
+    val_size = len(valid_set)
+
+    logger.info(f'shard_size: {shard_size} samples')
+    logger.info(f'validation set size: {val_size} samples')
 
     try:
         # training
@@ -239,6 +242,9 @@ def train(config):
         if config['run_type'] == 'debug':
             pdb.post_mortem()
 
+    logger.info("training finished")
+
+
 def make_logger(config):
     if config['run_type'] == 'debug':
         level = logging.DEBUG
@@ -273,6 +279,10 @@ if __name__ == "__main__":
     os.makedirs(checkdir, exist_ok=True)
 
     make_logger(config)
+
+    np.random.seed(config['seed'])
+    torch.cuda.manual_seed_all(config['seed'])
+    torch.cuda.empty_cache()
 
     if config['run_type'] == 'profile':
         profile(config)

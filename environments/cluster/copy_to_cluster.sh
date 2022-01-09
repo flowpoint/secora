@@ -8,4 +8,4 @@ tar -cvf \
     --exclude-vcs \
     ../secora
 
-scp ../secora.tar cluster:~
+scp ../secora.tar cluster_wr0:~

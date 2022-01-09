@@ -45,7 +45,6 @@ def profile(config):
     train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=10)
 
     it = iter(train_loader)
-    test_step(model, optim, next(it), config)
 
     tensorboard_run_path = os.path.join(config['logdir'], config['name'])
     trace_path = os.path.join(config['logdir'], config['name'], 'profile_trace.json')
@@ -56,11 +55,18 @@ def profile(config):
             profile_memory=True, 
             record_shapes=True,
             on_trace_ready=profiler.tensorboard_trace_handler(tensorboard_run_path),
+            schedule=torch.profiler.schedule(
+                wait=1,
+                warmup=1,
+                active=2),
             activities=[
                 profiler.ProfilerActivity.CPU,
                 profiler.ProfilerActivity.CUDA,
             ]) as p:
-        test_step(model, optim, next(it), config)
+        for batch in range(8):
+            test_step(model, optim, next(it), config)
+            p.step()
 
+    p.export_stacks(stacks_path, "self_cuda_time_total")
     print(p.key_averages().table(
         sort_by="self_cuda_time_total", row_limit=-1))

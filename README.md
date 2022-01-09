@@ -77,3 +77,13 @@ existing software:
 - [sourcegraph](https://sourcegraph.com/search)
 - [openai codex](https://openai.com/blog/openai-codex/)
 
+
+notes:
+```
+# setup
+pip3 install pipenv
+pipenv --python 3.9.2 shell
+pipenv install
+
+pip3 install torch==1.10.1+cu111 -f https://download.pytorch.org/whl/cu111/torch_stable.html
+```

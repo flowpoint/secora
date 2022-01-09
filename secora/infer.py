@@ -46,7 +46,7 @@ def k_nearest_neighbors(
     batch_size = config['infer_batch_size']
 
     # don't shuffle validation set!
-    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=10)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=4)
 
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
 
