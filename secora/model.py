@@ -19,7 +19,7 @@ class EmbeddingModel(torch.nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.base_model = AutoModelForMaskedLM.from_pretrained(config['model_name']).base_model
+        self.base_model = AutoModelForMaskedLM.from_pretrained(config['model_name'], hidden_dropout_prob=0.1).base_model
 
         # use [cls] pooling like simcse, because of its effectiveness
         self.embsize = config['embedding_size']
@@ -32,10 +32,26 @@ class EmbeddingModel(torch.nn.Module):
         self.activation = torch.nn.Tanh()
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
+        x = self.base_model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs).last_hidden_state
+        x = x[:, 0, :]
+        x = self.pooling(x)
+        x = self.activation(x)
+        return x
+
+
+class BiEmbeddingModel(torch.nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.m = EmbeddingModel(config)
+
+        self.precision = config['precision']
+
+    def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
         with autocast(enabled=self.precision == 'mixed'):
-            x = self.base_model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs).last_hidden_state
-            x = x[:, 0, :]
-            x = self.pooling(x)
-            x = self.activation(x)
+            x1 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
+            x2 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
+            
+            x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
             return x
+
 

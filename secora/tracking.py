@@ -6,6 +6,28 @@ import logging
 
 import torch
 
+def make_logger(config):
+    if config['run_type'] == 'debug':
+        level = logging.DEBUG
+    else: 
+        level = logging.INFO
+
+    logger = logging.getLogger('train')
+    logger.setLevel(level)
+
+    path = os.path.join(config['logdir'], config['name'], 'run.log')
+
+    fh = logging.FileHandler(path)
+    ch = logging.StreamHandler()
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
 
 
 class StateTracker:

@@ -14,4 +14,7 @@ module load cmake
 module load cuda/11.2
 module load python3
 
+
+#workaround for thread-unsafe tokenizers:
+export TOKENIZERS_PARALLELISM=false
 pipenv run python secora/train.py

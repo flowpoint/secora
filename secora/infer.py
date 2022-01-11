@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix=''):
+def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu'):
     batch_size = data_loader.batch_size
     dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
@@ -18,12 +18,12 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
 
     with torch.no_grad():
         for i, batch in enumerate(data_loader):
-            input_ids = batch[feature_prefix + 'input_ids'].to(config['device'])
-            token_type_ids = batch[feature_prefix + 'token_type_ids'].to(config['device'])
-            attention_mask = batch[feature_prefix + 'attention_mask'].to(config['device'])
+            input_ids = batch[feature_prefix + 'input_ids'].to(device, non_blocking=True)
+            token_type_ids = batch[feature_prefix + 'token_type_ids'].to(device, non_blocking=True)
+            attention_mask = batch[feature_prefix + 'attention_mask'].to(device, non_blocking=True)
 
-            if i == 0:
-                model = torch.jit.trace(model.forward, (input_ids, token_type_ids, attention_mask))
+            #if i == 0:
+            #    model = torch.jit.trace(model.forward, (input_ids, token_type_ids, attention_mask))
 
             sample_embedding = model(
                     input_ids,
@@ -38,15 +38,13 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
 
 def k_nearest_neighbors(
         model,
-        valid_set,
+        valid_loader,
         embedding_size,
         top_k,
-        config):
+        config,
+        device='cpu'):
 
     batch_size = config['infer_batch_size']
-
-    # don't shuffle validation set!
-    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, drop_last=True, pin_memory=True, num_workers=4, persistent_workers=True, prefetch_factor=4)
 
     dataset_shape = (len(valid_loader)*batch_size, embedding_size)
 

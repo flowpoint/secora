@@ -5,22 +5,21 @@ import torch
 import torch.nn.functional as F
 
 
-def contrastive_loss(model, batch, config):
+def contrastive_loss(model, input_ids, token_type_ids, attention_mask, config):
     ''' the loss used by simcse
     inspired by:
     https://github.com/princeton-nlp/SimCSE/blob/main/simcse/models.py
     '''
 
-    input_ids = batch['input_ids'].to(config['device'], non_blocking=True)
-    token_type_ids = batch['token_type_ids'].to(config['device'], non_blocking=True)
-    attention_mask = batch['attention_mask'].to(config['device'], non_blocking=True)
-
-    emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-    emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    #emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    #emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    biemb = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    emb1 = biemb[:,0]
+    emb2 = biemb[:,1]
 
     # use the exact same loss from the simcse repository
     sim = F.cosine_similarity(emb1.unsqueeze(1), emb2.unsqueeze(0), dim=-1) / config['temp']
-    labels = torch.arange(sim.size(0), dtype=torch.int64, device=config['device'])
+    labels = torch.arange(sim.size(0), dtype=torch.int64, device=sim.get_device())
     loss = F.cross_entropy(sim, labels)
 
     return loss

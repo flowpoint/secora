@@ -2,21 +2,25 @@ import torch
 
 config = {}
 
-if torch.cuda.is_available():
-    config['device'] = torch.device('cuda')
-else:
-    config['device'] = torch.device('cpu')
+config['hostname'] = 'localhost'
+config['port'] = '12355'
+
+config['num_gpus'] = 1
+if config['num_gpus'] > 0 and not torch.cuda.is_available():
+    raise RuntimeError('cuda is not available')
+
+if config['num_gpus'] > torch.cuda.device_count():
+    raise RuntimeError('num_gpus higher than number of available gpus')
 
 # experiment name
-config['name'] = 'gpu_profiling3'
+config['name'] = 'muli_gpu_profiling1'
 config['batch_size'] = 8
 config['infer_batch_size'] = 8
 
 config['seed'] = 42
 
 config['epochs'] = 1
-#config['shards'] = 10 
-config['shards'] = 20 
+config['shards'] = 20
 config['grad_accum'] = 64 // config['batch_size']
 
 # counted in batches, not in optimizer steps, because of grad_accum
@@ -56,8 +60,8 @@ config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 256
 
-#config['run_type'] = 'debug'
-config['run_type'] = 'profile'
+config['run_type'] = 'debug'
+#config['run_type'] = 'profile'
 #config['run_type'] = 'default'
 
 config['optim'] = 'adam'
@@ -67,5 +71,5 @@ config['optim'] = 'adam'
 
 config['precision'] = 'mixed'
 
-if config['precision'] == 'mixed' and config['device'] == 'cpu':
+if config['precision'] == 'mixed' and config['num_gpus'] == 0:
     raise RuntimeError('cant use cuda amp mixed on cpu')
