@@ -5,7 +5,9 @@ config = {}
 config['hostname'] = 'localhost'
 config['port'] = '12355'
 
-config['num_gpus'] = 1
+#config['num_gpus'] = 1
+config['num_gpus'] = torch.cuda.device_count()
+
 if config['num_gpus'] > 0 and not torch.cuda.is_available():
     raise RuntimeError('cuda is not available')
 

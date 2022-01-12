@@ -5,10 +5,12 @@ from dataclasses import dataclass
 import logging
 
 import torch
+import torch.distributed as dist
 
-def make_logger(config):
+def make_logger(config, log_all_ranks=False):
     if config['run_type'] == 'debug':
         level = logging.DEBUG
+        log_all_ranks = True
     else: 
         level = logging.INFO
 
@@ -20,14 +22,19 @@ def make_logger(config):
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()
 
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    rank = dist.get_rank()
+    if log_all_ranks == True or rank == 0:
+        rank_str = f' rank_{rank} -'
+    else:
+        rank_str = ''
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s -' + rank_str)
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
 
     logger.addHandler(fh)
     logger.addHandler(ch)
-
 
 
 class StateTracker:

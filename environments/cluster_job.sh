@@ -14,6 +14,11 @@ module load cmake
 module load cuda/11.2
 module load python3
 
+# TORCH_DISTRIBUTED_DEBUG=DETAIL
+# export NCCL_SOCKET_IFNAME=eno1
+# export NCCL_DEBUG_SUBSYS=ALL
+# export NCCL_DEBUG=INFO
+# export NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false

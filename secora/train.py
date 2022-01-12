@@ -53,7 +53,6 @@ def train_shard(
 
     logger = logging.getLogger('train')
 
-
     optim = state_tracker['optim']
     scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
@@ -66,7 +65,7 @@ def train_shard(
     shard_loss = torch.tensor([0.], device=rank, requires_grad=False)
 
     if rank == 0:
-        bar = tqdm(total=len(train_loader)/config['shards']*dist.get_world_size(), unit=' batch', desc='train_shard', smoothing=0.03)
+        bar = tqdm(total=len(train_loader)//config['shards']*dist.get_world_size(), unit=' batch', desc='train_shard', smoothing=0.03)
 
     try:
         for step, batch in enumerate(train_loader):
@@ -109,15 +108,15 @@ def train_shard(
                 else:
                     optim.step()
 
+                scheduler.step()
+                training_progress.optimizer_step += 1
                 if rank == 0:
-                    scheduler.step()
-                    training_progress.optimizer_step += 1
                     writer.add_scalar("lr/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
                     writer.flush()
 
                 optim.zero_grad(set_to_none=True)
 
-            if step > len(train_loader) / config['shards']:
+            if step > len(train_loader) // config['shards']:
                 break
 
 
@@ -148,22 +147,25 @@ def validate(
     else:
         device = dist.get_rank()
 
-    distances, neighbors, cosine_similarities = k_nearest_neighbors(
+    distances, neighbors = k_nearest_neighbors(
                 model, 
                 valid_loader, 
                 embedding_size=config['embedding_size'], 
                 top_k=config['top_k'], 
-                config=config,
-                device=device)
+                config=config)
 
-    neighbors_list = [list(n) for n in neighbors]
-    score = mrr(list(relevant_ids), neighbors_list)
+    rank = dist.get_rank()
+    if rank == 0:
 
-    i = training_progress.optimizer_step
-    writer.add_scalar("mrr/validation", score, i)
-    writer.add_scalar("distances/validation", np.mean(distances), i)
-    writer.add_scalar("cosine_similarity/validation", np.mean(cosine_similarities), i)
-    writer.flush()
+        neighbors_list = [list(n) for n in neighbors]
+        score = mrr(list(relevant_ids), neighbors_list)
+
+        i = training_progress.optimizer_step
+        rank = dist.get_rank()
+        writer.add_scalar("mrr/validation", score, i)
+        writer.add_scalar("distances/validation", np.mean(distances), i)
+        #writer.add_scalar("cosine_similarity/validation", np.mean(cosine_similarities), i)
+        writer.flush()
 
 
 def train(config):
@@ -177,7 +179,6 @@ def train(config):
     #model = EmbeddingModel(config).to(rank)
     model = BiEmbeddingModel(config).to(rank)
     model = DDP(model, device_ids=[rank])
-    #model = model.to(config['devices'][0])
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
@@ -190,33 +191,35 @@ def train(config):
     valid_set = preprocess_split('validation', config)
     # scroll screen
 
-    sampler = DistributedSampler(train_set)
+    train_sampler = DistributedSampler(train_set, drop_last=True)
     train_loader = DataLoader(
             train_set, 
             batch_size=config['batch_size'], 
-            shuffle=(sampler is None),
+            shuffle=(train_sampler is None),
             drop_last=True, 
             pin_memory=True, 
             # workers need to use the spawn or forkserver method in a distributed setting
             num_workers=1, 
             multiprocessing_context='spawn',
             persistent_workers=True, 
-            sampler=sampler
+            sampler=train_sampler
 
             )
 
 
     # don't shuffle validation set!
+    valid_sampler = DistributedSampler(train_set, drop_last=True)
     valid_loader = DataLoader(
             valid_set, 
             batch_size=config['batch_size'], 
-            shuffle=False, 
+            shuffle=(valid_sampler is None), 
             drop_last=True, 
             pin_memory=True, 
             # workers need to use the spawn or forkserver method in a distributed setting
             num_workers=1, 
             multiprocessing_context='spawn',
-            persistent_workers=True)
+            persistent_workers=True,
+            sampler=valid_sampler)
 
     print("\n"*8)
 
@@ -268,9 +271,6 @@ def train(config):
     val_size = len(valid_set)
     logger = logging.getLogger('train')
 
-    if rank != 0:
-        logger = UnLogger()
-
     logger.info(f'shard_size: {shard_size} samples')
     logger.info(f'validation set size: {val_size} samples')
 
@@ -296,25 +296,21 @@ def train(config):
                     state_tracker.save()
 
 
-                if rank == 0:
-                    logger.info('validating shard')
+                logger.info('validating shard')
 
-                    '''
-                    validate(state_tracker['model'], 
-                            valid_loader, 
-                            config, 
-                            writer, 
-                            state_tracker['training_progress'])
-                    '''
+                validate(state_tracker['model'], 
+                        valid_loader, 
+                        config, 
+                        writer, 
+                        state_tracker['training_progress'])
 
-                if rank == 0:
-                    training_progress.shard += 1
-            if rank == 0:
-                training_progress.epoch += 1
-                training_progress.shard = 0
+                training_progress.shard += 1
+            training_progress.epoch += 1
+            training_progress.shard = 0
 
     except KeyboardInterrupt as e:
-        state_tracker.save()
+        if rank == 0:
+            state_tracker.save()
         logger.info('training interrupted')
     except Exception as e:
         logger = logging.getLogger('train')
@@ -325,9 +321,6 @@ def train(config):
     dist.barrier(group=dist.group.WORLD)
     dist.destroy_process_group()
 
-class UnLogger:
-    def info(self, x):
-        pass
 
 def training_worker(rank, config):
     world_size = config['num_gpus']
@@ -338,15 +331,7 @@ def training_worker(rank, config):
     os.environ['MASTER_ADDR'] = host_name
     os.environ['MASTER_PORT'] = str(port)
 
-    #client_store = dist.TCPStore(host_name, port, world_size, is_master=False)
-
     # initialize the process group
-    # TORCH_DISTRIBUTED_DEBUG=DETAIL
-    # export NCCL_SOCKET_IFNAME=eno1
-    # export NCCL_DEBUG_SUBSYS=ALL
-    # export NCCL_DEBUG=INFO
-    # export NCCL_IB_DISABLE=1
-
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
@@ -368,11 +353,9 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(config['seed'])
     torch.cuda.empty_cache()
 
-    torch.backends.cudnn.benchmark = True
-
-    #server_store = dist.TCPStore(host_name, port, world_size, is_master=True)
 
     torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = True
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 
