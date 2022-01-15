@@ -24,11 +24,12 @@ from data import preprocess_split
 from config import config
 from losses import contrastive_loss, mrr
 from tracking import *
+from infer import k_nearest_neighbors
 
 from SM3 import SM3
 
 
-def test_step(model, optim, batch, config, device='cpu'):
+def train_step(model, optim, batch, config, device='cpu'):
     input_ids = batch['input_ids'].to(device, non_blocking=True)
     token_type_ids = batch['token_type_ids'].to(device, non_blocking=True)
     attention_mask = batch['attention_mask'].to(device, non_blocking=True)
@@ -105,8 +106,9 @@ def profile(config):
                 profiler.ProfilerActivity.CUDA,
             ]) as p:
         for batch in range(8):
-            test_step(model, optim, next(it), config, device=rank)
+            train_step(model, optim, next(it), config, device=rank)
             p.step()
+
 
     p.export_stacks(stacks_path, "self_cuda_time_total")
     print(p.key_averages().table(

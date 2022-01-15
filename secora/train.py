@@ -30,8 +30,8 @@ from transformers import get_linear_schedule_with_warmup
 
 from model import *
 from data import preprocess_split
-from config import config
-from infer import build_embedding_space, k_nearest_neighbors
+from config import load_config
+from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
 from tracking import *
 
@@ -46,12 +46,10 @@ def train_shard(
         config,
         writer,
         ):
-    ''' trains the model for until the budget is exhausted
-    '''
 
     rank = dist.get_rank()
 
-    logger = logging.getLogger('train')
+    logger = logging.getLogger(__name__)
 
     optim = state_tracker['optim']
     scheduler = state_tracker['scheduler']
@@ -65,7 +63,11 @@ def train_shard(
     shard_loss = torch.tensor([0.], device=rank, requires_grad=False)
 
     if rank == 0:
-        bar = tqdm(total=len(train_loader)//config['shards']*dist.get_world_size(), unit=' batch', desc='train_shard', smoothing=0.03)
+        bar = tqdm(
+                total=len(train_loader)//(config['shards']*dist.get_world_size()), 
+                unit=' batch', 
+                desc='train_shard', 
+                smoothing=0.03)
 
     try:
         for step, batch in enumerate(train_loader):
@@ -84,13 +86,15 @@ def train_shard(
             shard_loss.add_(loss.detach())
 
             if rank == 0:
-                bar.update(n=1*dist.get_world_size())
+                bar.update(n=1)
 
             # only sync before optimizer step
             if (step+1) % grad_accum != 0:
+                logger.debug('unsynced loss.backward')
                 with model.no_sync():
                     loss.backward()
             else:
+                logger.debug('optimization step')
                 loss.backward()
 
                 #gradient clipping
@@ -121,7 +125,6 @@ def train_shard(
 
 
     except Exception as e:
-        logger = logging.getLogger('train')
         logger.exception(e)
 
     dist.all_reduce(shard_loss)
@@ -132,53 +135,23 @@ def train_shard(
         writer.flush()
 
 
-def validate(
-        model, 
-        valid_loader, 
-        config, 
-        writer,
-        training_progress):
-    relevant_ids = range(len(valid_loader))
-
-    if config['num_gpus'] == 0:
-        device = 'cpu'
-    elif config['num_gpus'] == 1:
-        device = 'cuda'
-    else:
-        device = dist.get_rank()
-
-    distances, neighbors = k_nearest_neighbors(
-                model, 
-                valid_loader, 
-                embedding_size=config['embedding_size'], 
-                top_k=config['top_k'], 
-                config=config)
-
-    rank = dist.get_rank()
-    if rank == 0:
-
-        neighbors_list = [list(n) for n in neighbors]
-        score = mrr(list(relevant_ids), neighbors_list)
-
-        i = training_progress.optimizer_step
-        rank = dist.get_rank()
-        writer.add_scalar("mrr/validation", score, i)
-        writer.add_scalar("distances/validation", np.mean(distances), i)
-        #writer.add_scalar("cosine_similarity/validation", np.mean(cosine_similarities), i)
-        writer.flush()
 
 
 def train(config):
     rank = dist.get_rank()
 
-    make_logger(config)
-    logger = logging.getLogger('train')
+    if config['run_type'] == 'debug':
+        make_logger(config, rank=rank)
+    else:
+        make_logger(config, log_all_ranks=False, rank=rank)
+
+    logger = logging.getLogger(__name__)
 
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     #model = EmbeddingModel(config).to(rank)
-    model = BiEmbeddingModel(config).to(rank)
-    model = DDP(model, device_ids=[rank])
+    m = BiEmbeddingModel(config).to(rank)
+    model = DDP(m, device_ids=[rank])
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
@@ -191,7 +164,7 @@ def train(config):
     valid_set = preprocess_split('validation', config)
     # scroll screen
 
-    train_sampler = DistributedSampler(train_set, drop_last=True)
+    train_sampler = DistributedSampler(train_set, drop_last=True, shuffle=True)
     train_loader = DataLoader(
             train_set, 
             batch_size=config['batch_size'], 
@@ -208,7 +181,7 @@ def train(config):
 
 
     # don't shuffle validation set!
-    valid_sampler = DistributedSampler(train_set, drop_last=True)
+    valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
     valid_loader = DataLoader(
             valid_set, 
             batch_size=config['batch_size'], 
@@ -269,7 +242,7 @@ def train(config):
 
     shard_size = len(train_set)/num_shards
     val_size = len(valid_set)
-    logger = logging.getLogger('train')
+    logger = logging.getLogger(__name__)
 
     logger.info(f'shard_size: {shard_size} samples')
     logger.info(f'validation set size: {val_size} samples')
@@ -313,7 +286,6 @@ def train(config):
             state_tracker.save()
         logger.info('training interrupted')
     except Exception as e:
-        logger = logging.getLogger('train')
         logger.exception(e)
         dist.destroy_process_group()
 
@@ -340,14 +312,20 @@ def training_worker(rank, config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
-    parser.add_argument('--config', type=str)
+    parser.add_argument('config_path', type=str)
     args = parser.parse_args()
+
+    config = load_config(args.config_path)
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
+    make_logger(config, rank=-1)
+    logger = logging.getLogger(__name__)
+    logger.info(f'logdir: {logdir}')
+    logger.info(f'checkdir: {checkdir}')
 
     np.random.seed(config['seed'])
     torch.cuda.manual_seed_all(config['seed'])

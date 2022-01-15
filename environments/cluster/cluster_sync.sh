@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rsync -a --progress cluster_wr0:~/secora/output ../cluster_output 
+rsync -a --progress cluster_wr0:~/secora_output ../cluster_output 
 rsync -a \
     --delete-after \
     --exclude output \

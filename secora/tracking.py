@@ -7,22 +7,26 @@ import logging
 import torch
 import torch.distributed as dist
 
-def make_logger(config, log_all_ranks=False):
+def make_logger(config, log_all_ranks=False, rank=-1):
     if config['run_type'] == 'debug':
         level = logging.DEBUG
         log_all_ranks = True
     else: 
         level = logging.INFO
 
-    logger = logging.getLogger('train')
+    logger = logging.getLogger(__name__)
     logger.setLevel(level)
+
+    logdir = os.path.join(config['logdir'], config['name'])
+    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+    os.makedirs(logdir, exist_ok=True)
+    os.makedirs(checkdir, exist_ok=True)
 
     path = os.path.join(config['logdir'], config['name'], 'run.log')
 
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()
 
-    rank = dist.get_rank()
     if log_all_ranks == True or rank == 0:
         rank_str = f' rank_{rank} -'
     else:
@@ -66,7 +70,7 @@ class StateTracker:
         return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.checkpoint_dir)))
 
     def save(self):
-        logger = logging.getLogger('train')
+        logger = logging.getLogger(__name__)
 
         timestamp = ceil(time())
         path = os.path.join(self.checkpoint_dir, "checkpoint_" + str(timestamp) + ".pt")
@@ -84,14 +88,14 @@ class StateTracker:
             os.remove(old_path)
 
     def load_latest(self):
-        logger = logging.getLogger('train')
+        logger = logging.getLogger(__name__)
 
         existing_checkpoints = sorted(self._list_checkpoints())
         if len(existing_checkpoints) < 1:
             logger.info('no checkpoints available, not loading anything')
             return 
 
-        logger.info(f'found checkpoints in {self.checkpoint_dir}:\n{existing_checkpoints}')
+        logger.info(f'found checkpoints in {self.checkpoint_dir}: {existing_checkpoints}')
 
         checkpoint = existing_checkpoints[-1]
         path = os.path.join(self.checkpoint_dir, checkpoint)
@@ -102,8 +106,9 @@ class StateTracker:
             raise RuntimeError(f"checkpoint {path} doesn't exist")
 
         restored_state = torch.load(path)
-        for o,p in zip(self.objects.values(), restored_state):
-            o.load_state_dict(p)
+        for (objkey, obj), rs in zip(self.objects.items(), restored_state):
+            obj.load_state_dict(rs)
+
 
 @dataclass
 class TrainingProgress:
@@ -111,7 +116,7 @@ class TrainingProgress:
     # epoch -1 means warmup
     epoch: int = 0
     shard: int = 0 
-    optimizer_step: int = -1
+    optimizer_step: int = 0 
 
     def state_dict(self,):
         return { "epoch": self.epoch, 

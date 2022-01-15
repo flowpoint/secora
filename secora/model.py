@@ -49,9 +49,13 @@ class BiEmbeddingModel(torch.nn.Module):
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
         with autocast(enabled=self.precision == 'mixed'):
             x1 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
-            x2 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
-            
-            x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
-            return x
+            if self.training == True:
+                x2 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
+                
+                x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
+                return x
+
+            else:
+                return torch.unsqueeze(x1, dim=1)
 
 

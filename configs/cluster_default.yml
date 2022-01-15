@@ -1,0 +1,47 @@
+hostname: localhost
+port: 12355
+
+num_gpus: 'auto'
+
+name: 'test2'
+
+batch_size: 8
+infer_batch_size: 8
+
+seed: 42
+epochs: 1
+shards: 20
+
+grad_accum: 64 # counted in batches
+grad_accum: 63 # counted in batches
+
+warmup_batches: 10000
+temp: 0.05
+
+embedding_size: 128
+top_k:  5
+
+logdir: "~/secora_output"
+checkpoint_dir: "~/secora_output"
+
+max_checkpoints: 10
+
+model_name: 'microsoft/codebert-base'
+learning_rate: 1e-5
+
+finetune_mode: all
+
+languages:
+    - python
+
+
+preprocess_cores: 10
+preprocess_mode: concat
+
+max_input_tokens: 256
+
+run_type: default
+
+optimizer: adam
+
+precision: mixed
