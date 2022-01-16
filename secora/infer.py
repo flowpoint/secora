@@ -64,6 +64,7 @@ def k_nearest_neighbors(
         value_vectors,
         embedding_size,
         top_k,
+        logger=None,
         **kwargs):
 
     rank = dist.get_rank()
@@ -76,10 +77,12 @@ def k_nearest_neighbors(
 
     if rank == 0:
         #build the faiss index
-        q_space = torch.cat(q_gathered, 1).to('cpu').numpy()
-        v_space = torch.cat(v_gathered, 1).to('cpu').numpy()
+        q_space = torch.cat(q_gathered, -2).to('cpu').numpy()
+        v_space = torch.cat(v_gathered, -2).to('cpu').numpy()
 
-        logger = kwargs['logger']
+        if logger is None:
+            logger = logging.getLogger(__name__)
+
         logger.debug('building knn index')
         logger.debug(f'q_space: {q_space.shape}')
         logger.debug(f'v_space: {v_space.shape}')

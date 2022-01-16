@@ -71,7 +71,7 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
         raise RuntimeError('config specifies and unsupported optimizer')
 
     if 'train' in modes:
-        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*5)
+        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50)
 
         train_sampler = DistributedSampler(train_set, drop_last=True)
         train_loader = DataLoader(
@@ -112,8 +112,13 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
     trace_path = os.path.join(config['logdir'], config['name'], 'profile_trace.json')
     stacks_path = os.path.join(config['logdir'], config['name'], 'profile_stacks.txt')
 
+    if 'validation' in modes and not 'embedding' in modes:
+        code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
+        doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
 
-    #with profiler.profile()
+    torch.cuda.synchronize()
+    dist.barrier()
+
     with profiler.profile(
         with_stack=True, 
         #profile_memory=True, 
@@ -130,8 +135,6 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
         ]) as p:
 
         for idx in range(5):
-            torch.cuda.synchronize()
-            dist.barrier()
             logger.info(f'step {idx}')
             if 'train' in modes:
                 model.train()
@@ -139,14 +142,11 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
                 train_step(model, optim, next(train_iter), config, device=rank)
 
 
-            dist.barrier()
-            torch.cuda.synchronize()
             if 'embedding' in modes:
                 code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
                 doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
 
-            torch.cuda.synchronize()
-            dist.barrier()
+
             if 'validation' in modes:
                 with model.no_sync():
                     with torch.no_grad():
@@ -156,8 +156,12 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
                                 doc_embedding,
                                 code_embedding,
                                 embedding_size=config['embedding_size'], 
-                                top_k=config['top_k'])
+                                top_k=config['top_k'],
+                                logger=logger)
             p.step()
+
+    torch.cuda.synchronize()
+    dist.barrier()
 
     if rank == 0:
         print(p.key_averages().table(

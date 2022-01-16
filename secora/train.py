@@ -129,6 +129,7 @@ def train_shard(
         logger.exception(e)
 
     dist.all_reduce(shard_loss)
+    torch.cuda.synchronize()
     dist.barrier()
     if rank == 0:
         avg_loss = shard_loss.cpu().numpy()/step
@@ -211,6 +212,7 @@ def train(config):
             logger=logger)
 
     # load latest checkpoint 
+    torch.cuda.synchronize()
     dist.barrier()
     state_tracker.load_latest()
 
@@ -264,6 +266,7 @@ def train(config):
                     logger=logger
                     )
 
+                torch.cuda.synchronize()
                 dist.barrier()
                 if rank == 0:
                     state_tracker.save()
@@ -280,6 +283,8 @@ def train(config):
                 training_progress.shard += 1
             training_progress.epoch += 1
             training_progress.shard = 0
+
+        torch.cuda.synchronize()
         dist.barrier(group=dist.group.WORLD)
 
     except KeyboardInterrupt as e:
