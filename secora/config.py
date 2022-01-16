@@ -137,11 +137,6 @@ config['preprocess_cores'] = 10
 config['preprocess_mode'] = 'concat'
 
 config['max_input_tokens'] = 256
-
-#config['run_type'] = 'debug'
-#config['run_type'] = 'profile'
-config['run_type'] = 'default'
-
 config['optim'] = 'adam'
 
 # set to No

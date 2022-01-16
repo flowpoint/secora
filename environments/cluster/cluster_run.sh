@@ -25,4 +25,4 @@ unset NCCL_IB_DISABLE
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py configs/cluster_default.yml
+pipenv run python secora/train.py configs/cluster.yml --run_name cluster_run1

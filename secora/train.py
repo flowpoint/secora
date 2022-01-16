@@ -140,12 +140,7 @@ def train_shard(
 def train(config):
     rank = dist.get_rank()
 
-    if config['run_type'] == 'debug':
-        make_logger(config, rank=rank)
-    else:
-        make_logger(config, log_all_ranks=False, rank=rank)
-
-    logger = logging.getLogger(__name__)
+    logger = make_logger(config, log_all_ranks=False, rank=rank)
 
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
@@ -160,8 +155,13 @@ def train(config):
     else:
         raise RuntimeError('finetune_mode has to be: all or pooling')
 
-    train_set = preprocess_split('train', config)
-    valid_set = preprocess_split('validation', config)
+    if config['debug'] == True:
+        limit = 2*config['grad_accum']*config['batch_size']
+        train_set = preprocess_split('train', config, limit_samples=limit)
+        valid_set = preprocess_split('validation', config, limit_samples=limit)
+    else:
+        train_set = preprocess_split('train', config)
+        valid_set = preprocess_split('validation', config)
 
     # don't shuffle validation set!
     valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
@@ -189,7 +189,7 @@ def train(config):
         raise RuntimeError('config specifies an unsupported optimizer')
 
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
-    num_training_steps_per_epoch = ceil(len(train_loader) / (config['batch_size'] * config['grad_accum']))
+    num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
 
     scheduler = get_linear_schedule_with_warmup(
@@ -210,10 +210,9 @@ def train(config):
 
     # load latest checkpoint 
     dist.barrier()
-
     state_tracker.load_latest()
 
-    if config['run_type'] == 'debug':
+    if config['debug'] == True:
         num_epochs = 2
         num_shards = 2
         training_progress.epoch = 0
@@ -241,11 +240,11 @@ def train(config):
             while(training_progress.shard < num_shards):
                 logger.info('training shard')
 
-                train_shard = train_set.shard(training_progress.shard, contiguous=True)
+                shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
 
-                train_sampler = DistributedSampler(train_set, drop_last=True, shuffle=False)
+                train_sampler = DistributedSampler(shard, drop_last=True, shuffle=False)
                 train_loader = DataLoader(
-                        train_shard, 
+                        shard, 
                         batch_size=config['batch_size'], 
                         shuffle=False,
                         drop_last=True, 
@@ -264,7 +263,7 @@ def train(config):
                     )
 
                 dist.barrier()
-                if config['run_type'] == 'default' and rank == 0:
+                if rank == 0:
                     state_tracker.save()
 
 
@@ -279,13 +278,17 @@ def train(config):
                 training_progress.shard += 1
             training_progress.epoch += 1
             training_progress.shard = 0
+        dist.barrier(group=dist.group.WORLD)
 
     except KeyboardInterrupt as e:
         if rank == 0:
             state_tracker.save()
         logger.info('training interrupted')
     except Exception as e:
+        if config['debug'] == True:
+            pdb.post_mortem()
         logger.exception(e)
+    finally:
         dist.destroy_process_group()
 
 
@@ -303,9 +306,6 @@ def training_worker(rank, config):
     torch.cuda.set_device(rank)
 
     train(config)
-    logger.info("training finished")
-    dist.barrier(group=dist.group.WORLD)
-    dist.destroy_process_group()
 
 
 if __name__ == "__main__":
@@ -313,21 +313,21 @@ if __name__ == "__main__":
     parser.add_argument('config_path', type=str)
 
     parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
 
+    config = load_config(args.config_path)
+    if args.run_name != '':
+        config['name'] = args.run_name
+
+    config['debug'] = args.debug
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    make_logger(config, rank=-1)
-
-    config = load_config(args.config_path)
-    if args.run_name != '':
-        config['name'] = args.run_name
-
-    logger = logging.getLogger(__name__)
+    logger = make_logger(config, rank=-1)
     logger.info(f'logdir: {logdir}')
     logger.info(f'checkdir: {checkdir}')
 

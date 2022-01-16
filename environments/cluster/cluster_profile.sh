@@ -26,4 +26,4 @@ unset NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/profiling.py
+pipenv run python secora/profiling.py configs/cluster.sh --modes train --run_name profile_cluster1

@@ -8,7 +8,7 @@ import torch
 import torch.distributed as dist
 
 def make_logger(config, log_all_ranks=False, rank=-1):
-    if config['run_type'] == 'debug':
+    if config['debug'] == True:
         log_all_ranks = True
     else: 
         level = logging.INFO

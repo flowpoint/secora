@@ -71,7 +71,7 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
         raise RuntimeError('config specifies and unsupported optimizer')
 
     if 'train' in modes:
-        train_set = preprocess_split('train', config).select(range(config['batch_size']*5))
+        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*5)
 
         train_sampler = DistributedSampler(train_set, drop_last=True)
         train_loader = DataLoader(
@@ -90,7 +90,7 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
 
 
     if 'validation' in modes or 'embedding' in modes:
-        valid_set = preprocess_split('validation', config).select(range(config['batch_size']*5))
+        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5)
 
         valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
         valid_loader = DataLoader(
@@ -205,6 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('config_path', type=str)
     parser.add_argument('--modes', type=str, action='append', default=[])
     parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--debug', type=bool, default=False)
     args = parser.parse_args()
 
     if args.modes == []:
@@ -215,6 +216,7 @@ if __name__ == "__main__":
         config['name'] = args.run_name
 
     modes = args.modes
+    config['debug'] = args.debug
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])

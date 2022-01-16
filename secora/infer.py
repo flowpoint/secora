@@ -94,6 +94,8 @@ def validate(
         training_progress):
     relevant_ids = range(len(valid_loader))
 
+    rank = dist.get_rank()
+
     with model.no_sync():
         with torch.no_grad():
             code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)

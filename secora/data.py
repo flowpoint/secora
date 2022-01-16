@@ -51,15 +51,15 @@ def tokenize_valid_sample(tokenizer, batch, config):
     return proc_batch
 
 
-def preprocess_split(split, config):
+def preprocess_split(split, config, limit_samples=-1):
     if split not in ["train", "validation"]:
         raise RuntimeError(f"invalid dataset split: {split}")
 
     tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
 
     dataset = load_dataset("code_search_net")[split]
-    if config['run_type'] in ['debug', 'profile']:
-        dataset = dataset.select(range(2*config['grad_accum']*config['batch_size']))
+    if limit_samples >= 1:
+        dataset = dataset.select(range(limit_samples))
 
     dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=config['preprocess_cores'])
 
