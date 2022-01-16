@@ -4,7 +4,7 @@ port: 12355
 
 num_gpus: 'auto'
 
-name: 'run_name'
+name: 'run_name2'
 
 batch_size: 8
 infer_batch_size: 8
@@ -22,8 +22,8 @@ temp: 0.05
 embedding_size: 128
 top_k:  5
 
-logdir: "../output"
-checkpoint_dir: "../output"
+logdir: "./output2"
+checkpoint_dir: "./output2"
 
 max_checkpoints: 10
 

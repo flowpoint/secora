@@ -71,9 +71,9 @@ def train_shard(
 
     try:
         for step, batch in enumerate(train_loader):
-            input_ids = batch['input_ids'] .to(rank, non_blocking=True)
-            token_type_ids = batch['token_type_ids'].to(rank, non_blocking=True)
-            attention_mask = batch['attention_mask'].to(rank, non_blocking=True)
+            input_ids = batch['input_ids'] .to(rank)
+            token_type_ids = batch['token_type_ids'].to(rank)
+            attention_mask = batch['attention_mask'].to(rank)
 
             loss = scaler.scale(
                     contrastive_loss(
@@ -162,23 +162,6 @@ def train(config):
 
     train_set = preprocess_split('train', config)
     valid_set = preprocess_split('validation', config)
-    # scroll screen
-
-    train_sampler = DistributedSampler(train_set, drop_last=True, shuffle=True)
-    train_loader = DataLoader(
-            train_set, 
-            batch_size=config['batch_size'], 
-            shuffle=(train_sampler is None),
-            drop_last=True, 
-            pin_memory=True, 
-            # workers need to use the spawn or forkserver method in a distributed setting
-            num_workers=1, 
-            multiprocessing_context='spawn',
-            persistent_workers=True, 
-            sampler=train_sampler
-
-            )
-
 
     # don't shuffle validation set!
     valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
@@ -253,9 +236,25 @@ def train(config):
         # training
         while(training_progress.epoch < num_epochs):
             logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
+            train_set.shuffle()
 
             while(training_progress.shard < num_shards):
                 logger.info('training shard')
+
+                train_shard = train_set.shard(training_progress.shard, contiguous=True)
+
+                train_sampler = DistributedSampler(train_set, drop_last=True, shuffle=False)
+                train_loader = DataLoader(
+                        train_shard, 
+                        batch_size=config['batch_size'], 
+                        shuffle=False,
+                        drop_last=True, 
+                        pin_memory=True, 
+                        # workers need to use the spawn or forkserver method in a distributed setting
+                        num_workers=1, 
+                        multiprocessing_context='spawn',
+                        persistent_workers=True, 
+                        sampler=train_sampler)
 
                 train_shard(
                     state_tracker,
@@ -289,10 +288,6 @@ def train(config):
         logger.exception(e)
         dist.destroy_process_group()
 
-    logger.info("training finished")
-    dist.barrier(group=dist.group.WORLD)
-    dist.destroy_process_group()
-
 
 def training_worker(rank, config):
     world_size = config['num_gpus']
@@ -308,14 +303,18 @@ def training_worker(rank, config):
     torch.cuda.set_device(rank)
 
     train(config)
+    logger.info("training finished")
+    dist.barrier(group=dist.group.WORLD)
+    dist.destroy_process_group()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
     parser.add_argument('config_path', type=str)
+
+    parser.add_argument('--run_name', type=str, default='')
     args = parser.parse_args()
 
-    config = load_config(args.config_path)
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
@@ -323,6 +322,11 @@ if __name__ == "__main__":
     os.makedirs(checkdir, exist_ok=True)
 
     make_logger(config, rank=-1)
+
+    config = load_config(args.config_path)
+    if args.run_name != '':
+        config['name'] = args.run_name
+
     logger = logging.getLogger(__name__)
     logger.info(f'logdir: {logdir}')
     logger.info(f'checkdir: {checkdir}')

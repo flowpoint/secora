@@ -135,6 +135,7 @@ input/*
 # maybe include input/eval_data/* ?
 # !input/eval_data/
 output/*
+output2/*
 Pipfile.lock
 resources/
 third_party/

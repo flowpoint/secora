@@ -9,10 +9,11 @@ import torch.distributed as dist
 
 def make_logger(config, log_all_ranks=False, rank=-1):
     if config['run_type'] == 'debug':
-        level = logging.DEBUG
         log_all_ranks = True
     else: 
         level = logging.INFO
+
+    level = logging.DEBUG
 
     logger = logging.getLogger(__name__)
     logger.setLevel(level)
@@ -27,18 +28,17 @@ def make_logger(config, log_all_ranks=False, rank=-1):
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()
 
-    if log_all_ranks == True or rank == 0:
-        rank_str = f' rank_{rank} -'
-    else:
-        rank_str = ''
+    rank_str = f'rank_{rank}'
 
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s -' + rank_str)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - ' + rank_str + ' - %(message)s')
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
 
     logger.addHandler(fh)
     logger.addHandler(ch)
+
+    return logger
 
 
 class StateTracker:
