@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=32     # number of tasks per node
 #SBATCH --mem=20G                 # memory per node in MB (different units with suffix K|M|G|T)
 #SBATCH --time=40:00:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
-#SBATCH --output=logs/slurm_tests.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
-#SBATCH --error=logs/slurm_test.%j.err     # filename for STDERR
+#SBATCH --output=slurm_logs/slurm_debug.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
+#SBATCH --error=slurm_logs/slurm_debug.%j.err     # filename for STDERR
 
 cd ~/secora
 # setup
@@ -26,4 +26,4 @@ export NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py configs/cluster_default --debug
+pipenv run python secora/train.py --debug configs/cluster.yml

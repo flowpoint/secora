@@ -7,7 +7,7 @@ import logging
 import torch
 import torch.distributed as dist
 
-def make_logger(config, log_all_ranks=False, rank=-1):
+def make_logger(config, debug=False, log_all_ranks=False, rank=-1):
     if config['debug'] == True:
         log_all_ranks = True
     else: 
@@ -42,7 +42,7 @@ def make_logger(config, log_all_ranks=False, rank=-1):
 
 
 class StateTracker:
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, logger=None, **kwargs):
         self.config = config
 
         if 'checkpoint_dir' not in config.keys():
@@ -55,7 +55,12 @@ class StateTracker:
         self.checkpoint_dir = os.path.join(config['checkpoint_dir'], config['name'])
         self.max_checkpoints = self.config['max_checkpoints']
 
-        for o in kwargs.values():
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
+
+        for k, o in kwargs.items():
             if "state_dict" not in dir(o):
                 raise RuntimeError(f'tracked object: {o} need to have a state_dict() method')
             if "load_state_dict" not in dir(o):
@@ -70,13 +75,11 @@ class StateTracker:
         return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.checkpoint_dir)))
 
     def save(self):
-        logger = logging.getLogger(__name__)
-
         timestamp = ceil(time())
         path = os.path.join(self.checkpoint_dir, "checkpoint_" + str(timestamp) + ".pt")
         state = [o.state_dict() for o in self.objects.values()]
 
-        logger.info(f'saving state to {path}')
+        self.logger.info(f'saving state to {path}')
         torch.save(state, path)
 
         # remove oldest checkpoint, through lexicographic order
@@ -84,23 +87,23 @@ class StateTracker:
 
         if len(checkpoints) > self.max_checkpoints:
             old_path = os.path.join(self.checkpoint_dir, sorted(checkpoints)[0])
-            logger.info(f'removing old checkpoint: {old_path}')
+            self.logger.info(f'removing old checkpoint: {old_path}')
             os.remove(old_path)
 
     def load_latest(self):
-        logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
 
         existing_checkpoints = sorted(self._list_checkpoints())
         if len(existing_checkpoints) < 1:
-            logger.info('no checkpoints available, not loading anything')
+            self.logger.info('no checkpoints available, not loading anything')
             return 
 
-        logger.info(f'found checkpoints in {self.checkpoint_dir}: {existing_checkpoints}')
+        self.logger.info(f'found checkpoints in {self.checkpoint_dir}: {existing_checkpoints}')
 
         checkpoint = existing_checkpoints[-1]
         path = os.path.join(self.checkpoint_dir, checkpoint)
 
-        logger.info(f'restoring: {path}')
+        self.logger.info(f'restoring: {path}')
 
         if not os.path.isfile(path):
             raise RuntimeError(f"checkpoint {path} doesn't exist")

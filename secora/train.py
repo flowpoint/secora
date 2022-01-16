@@ -45,11 +45,12 @@ def train_shard(
         train_loader,
         config,
         writer,
+        **kwargs
         ):
 
     rank = dist.get_rank()
 
-    logger = logging.getLogger(__name__)
+    logger = kwargs['logger']
 
     optim = state_tracker['optim']
     scheduler = state_tracker['scheduler']
@@ -140,7 +141,7 @@ def train_shard(
 def train(config):
     rank = dist.get_rank()
 
-    logger = make_logger(config, log_all_ranks=False, rank=rank)
+    logger = make_logger(config, debug=config['debug'], log_all_ranks=False, rank=rank)
 
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
@@ -206,7 +207,8 @@ def train(config):
             optim=optim,
             scheduler=scheduler,
             scaler=scaler,
-            training_progress=training_progress)
+            training_progress=training_progress,
+            logger=logger)
 
     # load latest checkpoint 
     dist.barrier()
@@ -224,7 +226,6 @@ def train(config):
 
     shard_size = len(train_set)/num_shards
     val_size = len(valid_set)
-    logger = logging.getLogger(__name__)
 
     logger.info(f'shard_size: {shard_size} samples')
     logger.info(f'validation set size: {val_size} samples')
@@ -238,7 +239,7 @@ def train(config):
             train_set.shuffle()
 
             while(training_progress.shard < num_shards):
-                logger.info('training shard')
+                logger.info(f'training shard: {training_progress.shard}')
 
                 shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
 
@@ -260,20 +261,21 @@ def train(config):
                     train_loader,
                     config,
                     writer,
+                    logger=logger
                     )
 
                 dist.barrier()
                 if rank == 0:
                     state_tracker.save()
 
-
-                logger.info('validating shard')
+                logger.info(f'validating shard {training_progress.shard}')
 
                 validate(state_tracker['model'], 
                         valid_loader, 
                         config, 
                         writer, 
-                        state_tracker['training_progress'])
+                        state_tracker['training_progress'],
+                        logger=logger)
 
                 training_progress.shard += 1
             training_progress.epoch += 1
@@ -327,7 +329,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    logger = make_logger(config, rank=-1)
+    logger = make_logger(config, rank=-1, debug=config['debug'])
     logger.info(f'logdir: {logdir}')
     logger.info(f'checkdir: {checkdir}')
 

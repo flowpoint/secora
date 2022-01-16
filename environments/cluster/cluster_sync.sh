@@ -1,6 +1,8 @@
 #!/bin/bash
 
-rsync -a --progress cluster_wr0:~/cluster_output ../cluster_output 
+rsync -a --progress cluster_wr0:~/cluster_output/ ../cluster_output/
+rsync -a --progress cluster_wr0:~/slurm_logs ../slurm_logs
+
 rsync -a \
     --delete-after \
     --exclude output \

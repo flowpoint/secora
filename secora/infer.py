@@ -63,17 +63,27 @@ def k_nearest_neighbors(
         query_vectors,
         value_vectors,
         embedding_size,
-        top_k):
+        top_k,
+        **kwargs):
 
     rank = dist.get_rank()
 
     q_gathered = gather(query_vectors)
     v_gathered = gather(value_vectors)
 
+    torch.cuda.synchronize()
+    dist.barrier()
+
     if rank == 0:
         #build the faiss index
         q_space = torch.cat(q_gathered, 1).to('cpu').numpy()
         v_space = torch.cat(v_gathered, 1).to('cpu').numpy()
+
+        logger = kwargs['logger']
+        logger.debug('building knn index')
+        logger.debug(f'q_space: {q_space.shape}')
+        logger.debug(f'v_space: {v_space.shape}')
+        logger.debug(f'embedding: {embedding_size}')
 
         index = faiss.index_factory(embedding_size, 'SQfp16')#Flat')
         index.train(v_space)
@@ -91,7 +101,8 @@ def validate(
         valid_loader, 
         config, 
         writer,
-        training_progress):
+        training_progress,
+        **kwargs):
     relevant_ids = range(len(valid_loader))
 
     rank = dist.get_rank()
@@ -106,7 +117,8 @@ def validate(
                     doc_embedding,
                     code_embedding,
                     embedding_size=config['embedding_size'], 
-                    top_k=config['top_k'])
+                    top_k=config['top_k'],
+                    **kwargs)
                         
 
     rank = dist.get_rank()
