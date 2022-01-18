@@ -29,8 +29,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import get_linear_schedule_with_warmup
 
 from model import *
-from data import preprocess_split
-from config import load_config
+from data import preprocess_split, get_train_loader
+from config import load_config, overwrite_config
 from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
 from tracking import *
@@ -72,7 +72,7 @@ def train_shard(
 
     try:
         for step, batch in enumerate(train_loader):
-            input_ids = batch['input_ids'] .to(rank)
+            input_ids = batch['input_ids'].to(rank)
             token_type_ids = batch['token_type_ids'].to(rank)
             attention_mask = batch['attention_mask'].to(rank)
 
@@ -138,24 +138,12 @@ def train_shard(
 
 
 
-
 def train(config):
     rank = dist.get_rank()
 
     logger = make_logger(config, debug=config['debug'], log_all_ranks=False, rank=rank)
 
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-
-    #model = EmbeddingModel(config).to(rank)
-    m = BiEmbeddingModel(config).to(rank)
-    model = DDP(m, device_ids=[rank])
-
-    if config['finetune_mode'] == 'all':
-        params = model.parameters()
-    elif config['finetune_mode'] == 'pooling':
-        params = model.pooling.parameters()
-    else:
-        raise RuntimeError('finetune_mode has to be: all or pooling')
 
     if config['debug'] == True:
         limit = 2*config['grad_accum']*config['batch_size']
@@ -164,6 +152,8 @@ def train(config):
     else:
         train_set = preprocess_split('train', config)
         valid_set = preprocess_split('validation', config)
+
+    train_loader = get_train_loader(train_set, config, persistent=False)
 
     # don't shuffle validation set!
     valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
@@ -180,6 +170,27 @@ def train(config):
             sampler=valid_sampler)
 
     print("\n"*8)
+
+    m = BiEmbeddingModel(config).to(rank)
+
+    if config['cuda_graphs'] == True:
+        batch = next(iter(train_loader))
+
+        input_ids = batch['input_ids'].to(rank)
+        token_type_ids = batch['token_type_ids'].to(rank)
+        attention_mask = batch['attention_mask'].to(rank)
+
+        dummy_inputs = (input_ids, token_type_ids, attention_mask)
+        m.make_graphed(dummy_inputs)
+
+    model = DDP(m, device_ids=[rank])
+
+    if config['finetune_mode'] == 'all':
+        params = model.parameters()
+    elif config['finetune_mode'] == 'pooling':
+        params = model.pooling.parameters()
+    else:
+        raise RuntimeError('finetune_mode has to be: all or pooling')
 
     if config['optim'] == 'adam':
         optim = torch.optim.Adam(params, lr=config['lr'])
@@ -244,19 +255,7 @@ def train(config):
                 logger.info(f'training shard: {training_progress.shard}')
 
                 shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-
-                train_sampler = DistributedSampler(shard, drop_last=True, shuffle=False)
-                train_loader = DataLoader(
-                        shard, 
-                        batch_size=config['batch_size'], 
-                        shuffle=False,
-                        drop_last=True, 
-                        pin_memory=True, 
-                        # workers need to use the spawn or forkserver method in a distributed setting
-                        num_workers=1, 
-                        multiprocessing_context='spawn',
-                        persistent_workers=True, 
-                        sampler=train_sampler)
+                train_loader = get_train_loader(shard, config)
 
                 train_shard(
                     state_tracker,
@@ -307,7 +306,9 @@ def training_worker(rank, config):
 
     os.environ['MASTER_ADDR'] = host_name
     os.environ['MASTER_PORT'] = str(port)
-
+    
+    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+    
     # initialize the process group
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
@@ -319,15 +320,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
     parser.add_argument('config_path', type=str)
 
-    parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--run_name', type=str, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
+    parser.add_argument('--batch_size', type=int, default=None)
     args = parser.parse_args()
 
     config = load_config(args.config_path)
-    if args.run_name != '':
-        config['name'] = args.run_name
-
-    config['debug'] = args.debug
+    config = overwrite_config(args, config)
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
@@ -341,7 +340,6 @@ if __name__ == "__main__":
     np.random.seed(config['seed'])
     torch.cuda.manual_seed_all(config['seed'])
     torch.cuda.empty_cache()
-
 
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = True

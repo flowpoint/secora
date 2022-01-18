@@ -59,5 +59,3 @@ WORKDIR /root/secora
 #USER buildbot
 
 CMD ["/usr/bin/dumb-init", "twistd", "--pidfile=", "-ny", "buildbot.tac"]
-
-

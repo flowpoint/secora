@@ -13,7 +13,8 @@ def contrastive_loss(model, input_ids, token_type_ids, attention_mask, config):
 
     #emb1 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
     #emb2 = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-    biemb = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    #biemb = model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+    biemb = model(input_ids, token_type_ids, attention_mask)
     emb1 = biemb[:,0]
     emb2 = biemb[:,1]
 

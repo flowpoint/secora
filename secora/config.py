@@ -71,6 +71,22 @@ def load_config(path):
     if yconfig['precision'] == 'mixed' and int(config['num_gpus']) == 0:
         raise RuntimeError('cant use cuda amp mixed on cpu')
 
+    if not isinstance(config['cuda_graphs'], bool):
+        raise RuntimeError('cuda_graphs has to be bool')
+
+
+    return config
+
+
+def overwrite_config(args, config):
+    if args.run_name is not None :
+        config['name'] = args.run_name
+
+    if args.batch_size is not None:
+        config['batch_size'] = args.batch_size
+
+    config['debug'] = args.debug
+    check(config)
 
     return config
 

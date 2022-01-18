@@ -5,8 +5,8 @@ num_gpus: 'auto'
 
 name: 'cluster_run_name'
 
-batch_size: 8
-infer_batch_size: 8
+batch_size: 64
+infer_batch_size: 64
 
 seed: 42
 epochs: 1
@@ -33,11 +33,12 @@ finetune_mode: all
 languages:
     - python
 
+cuda_graphs: True
 
 preprocess_cores: 10
 preprocess_mode: concat
 
-max_input_tokens: 256
+max_input_tokens: 200
 
 optimizer: adam
 

@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
+from torch.utils.data.distributed import DistributedSampler
+
 
 
 def preproc_valid(sample):
@@ -89,3 +91,20 @@ def preprocess_split(split, config, limit_samples=-1):
     dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url'}, output_all_columns=True)
 
     return dataset
+
+
+def get_train_loader(shard, config, persistent=True):
+    train_sampler = DistributedSampler(shard, drop_last=True, shuffle=False)
+    train_loader = DataLoader(
+            shard, 
+            batch_size=config['batch_size'], 
+            shuffle=False,
+            drop_last=True, 
+            pin_memory=True, 
+            # workers need to use the spawn or forkserver method in a distributed setting
+            num_workers=1, 
+            multiprocessing_context='spawn',
+            persistent_workers=persistent, 
+            sampler=train_sampler)
+
+    return train_loader

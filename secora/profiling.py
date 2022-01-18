@@ -21,7 +21,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from model import BiEmbeddingModel
 from data import preprocess_split
-from config import load_config
+from config import load_config, overwrite_config
 from losses import contrastive_loss, mrr
 from tracking import *
 from infer import *
@@ -48,11 +48,55 @@ def train_step(model, optim, batch, config, device='cpu'):
     optim.zero_grad(set_to_none=True)
 
 
-def profile(config, logger, modes=['train','validation', 'embedding']):
+def profile(config, logger, modes):
     rank = dist.get_rank()
 
-    model = BiEmbeddingModel(config).to(rank)
-    model = DDP(model, device_ids=[rank])
+    if 'train' in modes:
+        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50)
+
+        train_sampler = DistributedSampler(train_set, drop_last=True)
+        train_loader = DataLoader(
+                train_set, 
+                batch_size=config['batch_size'], 
+                shuffle=(train_sampler is None),
+                drop_last=True, 
+                pin_memory=True, 
+                # workers need to use the spawn or forkserver method in a distributed setting
+                num_workers=4, 
+                multiprocessing_context='spawn',
+                persistent_workers=True, 
+                sampler=train_sampler)
+
+    if 'validation' in modes or 'embedding' in modes:
+        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5)
+
+        valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
+        valid_loader = DataLoader(
+                valid_set, 
+                batch_size=config['batch_size'], 
+                shuffle=(valid_sampler is None), 
+                drop_last=True, 
+                pin_memory=True, 
+                # workers need to use the spawn or forkserver method in a distributed setting
+                num_workers=4, 
+                multiprocessing_context='spawn',
+                persistent_workers=True,
+                sampler=valid_sampler)
+
+
+    m = BiEmbeddingModel(config).to(rank)
+    
+    if 'train' in modes and config['cuda_graphs'] == True:
+        batch = next(iter(train_loader))
+
+        input_ids = batch['input_ids'].to(rank)
+        token_type_ids = batch['token_type_ids'].to(rank)
+        attention_mask = batch['attention_mask'].to(rank)
+
+        dummy_inputs = (input_ids, token_type_ids, attention_mask)
+        m.make_graphed(dummy_inputs)
+
+    model = DDP(m, device_ids=[rank])
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
@@ -70,42 +114,6 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
     else:
         raise RuntimeError('config specifies and unsupported optimizer')
 
-    if 'train' in modes:
-        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50)
-
-        train_sampler = DistributedSampler(train_set, drop_last=True)
-        train_loader = DataLoader(
-                train_set, 
-                batch_size=config['batch_size'], 
-                shuffle=(train_sampler is None),
-                drop_last=True, 
-                pin_memory=True, 
-                # workers need to use the spawn or forkserver method in a distributed setting
-                num_workers=1, 
-                multiprocessing_context='spawn',
-                persistent_workers=True, 
-                sampler=train_sampler)
-
-        train_iter = iter(train_loader)
-
-
-    if 'validation' in modes or 'embedding' in modes:
-        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5)
-
-        valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
-        valid_loader = DataLoader(
-                valid_set, 
-                batch_size=config['batch_size'], 
-                shuffle=(valid_sampler is None), 
-                drop_last=True, 
-                pin_memory=True, 
-                # workers need to use the spawn or forkserver method in a distributed setting
-                num_workers=1, 
-                multiprocessing_context='spawn',
-                persistent_workers=True,
-                sampler=valid_sampler)
-
-
     logger.info('starting profiler')
 
     tensorboard_run_path = os.path.join(config['logdir'], config['name'])
@@ -121,12 +129,12 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
 
     with profiler.profile(
         with_stack=True, 
-        #profile_memory=True, 
+        profile_memory=True, 
         record_shapes=True,
         on_trace_ready=profiler.tensorboard_trace_handler(tensorboard_run_path),
         schedule=torch.profiler.schedule(
-            skip_first=1,
-            wait=0,
+            skip_first=4,
+            wait=1,
             warmup=1,
             active=2),
         activities=[
@@ -134,18 +142,16 @@ def profile(config, logger, modes=['train','validation', 'embedding']):
             profiler.ProfilerActivity.CUDA,
         ]) as p:
 
-        for idx in range(5):
+        for idx, batch in zip(range(8), train_loader):
             logger.info(f'step {idx}')
             if 'train' in modes:
                 model.train()
                 logger.info(f'train_step')
-                train_step(model, optim, next(train_iter), config, device=rank)
-
+                train_step(model, optim, batch, config, device=rank)
 
             if 'embedding' in modes:
                 code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
                 doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
-
 
             if 'validation' in modes:
                 with model.no_sync():
@@ -203,12 +209,12 @@ def copytest():
         full_doc_embedding_space = np.concatenate(doc_cpu, 0).astype(np.float32)
     
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual profiling script.')
     parser.add_argument('config_path', type=str)
     parser.add_argument('--modes', type=str, action='append', default=[])
     parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', type=bool, default=False)
     args = parser.parse_args()
 
@@ -216,11 +222,14 @@ if __name__ == "__main__":
         raise RuntimeError('--modes have to be at least one')
 
     config = load_config(args.config_path)
-    if args.run_name != '':
-        config['name'] = args.run_name
+    config = overwrite_config(args, config)
+
 
     modes = args.modes
-    config['debug'] = args.debug
+
+    avail_modes = ['train', 'embedding', 'validation']
+    if any([m not in avail_modes for m in modes]):
+        raise RuntimeError('only the modes train, embedding, validation are supported')
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])

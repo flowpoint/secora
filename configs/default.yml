@@ -26,6 +26,8 @@ checkpoint_dir: "./output"
 
 max_checkpoints: 10
 
+cuda_graphs: False
+
 model_name: 'microsoft/codebert-base'
 learning_rate: 1e-5
 

@@ -40,22 +40,33 @@ class EmbeddingModel(torch.nn.Module):
 
 
 class BiEmbeddingModel(torch.nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, dummy_inputs=None):
         super().__init__()
+        self.precision = config['precision']
+        self.is_graphed = False
+
         self.m = EmbeddingModel(config)
 
-        self.precision = config['precision']
+    def make_graphed(self, dummy_inputs):
+        if self.is_graphed == True:
+            return 
+
+        self.is_graphed = True
+        self.ungraphed_model = self.m
+        torch.cuda.synchronize()
+
+        self.m = torch.cuda.make_graphed_callables(self.m, dummy_inputs)
+        torch.cuda.synchronize()
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
         with autocast(enabled=self.precision == 'mixed'):
-            x1 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
+            x1 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
             if self.training == True:
-                x2 = self.m(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs)
+                x2 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
                 
                 x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
                 return x
 
             else:
                 return torch.unsqueeze(x1, dim=1)
-
 
