@@ -7,13 +7,11 @@ import logging
 import torch
 import torch.distributed as dist
 
-def make_logger(config, debug=False, log_all_ranks=False, rank=-1):
-    if config['debug'] == True:
-        log_all_ranks = True
+def make_logger(config, debug=False, rank=-1):
+    if debug == True:
+        level = logging.DEBUG
     else: 
         level = logging.INFO
-
-    level = logging.DEBUG
 
     logger = logging.getLogger(__name__)
     logger.setLevel(level)
@@ -35,14 +33,15 @@ def make_logger(config, debug=False, log_all_ranks=False, rank=-1):
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
 
-    logger.addHandler(fh)
-    logger.addHandler(ch)
+    if logger.hasHandlers() == False:
+        logger.addHandler(fh)
+        logger.addHandler(ch)
 
     return logger
 
 
 class StateTracker:
-    def __init__(self, config, logger=None, **kwargs):
+    def __init__(self, config, logger, **kwargs):
         self.config = config
 
         if 'checkpoint_dir' not in config.keys():
@@ -56,11 +55,7 @@ class StateTracker:
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.max_checkpoints = self.config['max_checkpoints']
 
-
-        if logger is None:
-            self.logger = logging.getLogger(__name__)
-        else:
-            self.logger = logger
+        self.logger = logger
 
         if self.max_checkpoints == 0:
             self.logger.warning("max_checkpoints is 0, no checkpoints will be saved")

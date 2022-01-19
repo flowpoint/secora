@@ -29,7 +29,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import get_linear_schedule_with_warmup
 
 from model import *
-from data import preprocess_split, get_train_loader
+from data import *
 from config import load_config, overwrite_config
 from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
@@ -63,30 +63,26 @@ def train_shard(
     grad_accum = config['grad_accum']
     shard_loss = torch.tensor([0.], device=rank, requires_grad=False)
 
-    if rank == 0:
+    if rank == 0 and kwargs['progress'] == True:
         bar = tqdm(
-                total=len(train_loader)//(config['shards']*dist.get_world_size()), 
+                total=len(train_loader), 
                 unit=' batch', 
                 desc='train_shard', 
                 smoothing=0.03)
 
     try:
-        for step, batch in enumerate(train_loader):
-            input_ids = batch['input_ids'].to(rank)
-            token_type_ids = batch['token_type_ids'].to(rank)
-            attention_mask = batch['attention_mask'].to(rank)
+        for step, batch in enumerate(deviceloader(train_loader, rank)):
+            model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
 
             loss = scaler.scale(
                     contrastive_loss(
                         model, 
-                        input_ids, 
-                        token_type_ids, 
-                        attention_mask, 
+                        model_inputs,
                         config))
 
             shard_loss.add_(loss.detach())
 
-            if rank == 0:
+            if rank == 0 and kwargs['progress'] == True:
                 bar.update(n=1)
 
             # only sync before optimizer step
@@ -121,9 +117,6 @@ def train_shard(
 
                 optim.zero_grad(set_to_none=True)
 
-            if step > len(train_loader) // config['shards']:
-                break
-
 
     except Exception as e:
         logger.exception(e)
@@ -137,52 +130,40 @@ def train_shard(
         writer.flush()
 
 
-
-def train(config):
+def train(config, **kwargs):
     rank = dist.get_rank()
-
-    logger = make_logger(config, debug=config['debug'], log_all_ranks=False, rank=rank)
-
+    logger = make_logger(config, debug=kwargs['debug'], rank=rank)
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
-    if config['debug'] == True:
+    if kwargs['debug'] == True:
         limit = 2*config['grad_accum']*config['batch_size']
-        train_set = preprocess_split('train', config, limit_samples=limit)
-        valid_set = preprocess_split('validation', config, limit_samples=limit)
+        train_set = preprocess_split('train', config, limit_samples=limit, **kwargs)
+        valid_set = preprocess_split('validation', config, limit_samples=limit, **kwargs)
     else:
-        train_set = preprocess_split('train', config)
-        valid_set = preprocess_split('validation', config)
+        train_set = preprocess_split('train', config, **kwargs)
+        valid_set = preprocess_split('validation', config, **kwargs)
 
-    train_loader = get_train_loader(train_set, config, persistent=False)
+    train_loader = get_loader(train_set, config)
 
     # don't shuffle validation set!
-    valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
-    valid_loader = DataLoader(
-            valid_set, 
-            batch_size=config['batch_size'], 
-            shuffle=(valid_sampler is None), 
-            drop_last=True, 
-            pin_memory=True, 
-            # workers need to use the spawn or forkserver method in a distributed setting
-            num_workers=1, 
-            multiprocessing_context='spawn',
-            persistent_workers=True,
-            sampler=valid_sampler)
-
-    print("\n"*8)
-
+    valid_loader = get_loader(valid_set, config, **kwargs)
     m = BiEmbeddingModel(config).to(rank)
 
+    logger.info('warming up cuda benchmark')
+    for step, batch in zip(range(12), deviceloader(train_loader, rank)):
+        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
+        m(*model_inputs)
+
     if config['cuda_graphs'] == True:
-        batch = next(iter(train_loader))
+        logger.info('cuda_graphs is True: building the cuda graph')
+        m = BiEmbeddingModel(config).to(rank)
 
-        input_ids = batch['input_ids'].to(rank)
-        token_type_ids = batch['token_type_ids'].to(rank)
-        attention_mask = batch['attention_mask'].to(rank)
+        batch = next(iter(deviceloader(train_loader, rank)))
 
-        dummy_inputs = (input_ids, token_type_ids, attention_mask)
-        m.make_graphed(dummy_inputs)
+        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
+        m.make_graphed(model_inputs)
 
+    logger.info('building DDP model')
     model = DDP(m, device_ids=[rank])
 
     if config['finetune_mode'] == 'all':
@@ -215,19 +196,19 @@ def train(config):
     training_progress = TrainingProgress()
     state_tracker = StateTracker(
             config,
+            logger,
             model=model,
             optim=optim,
             scheduler=scheduler,
             scaler=scaler,
-            training_progress=training_progress,
-            logger=logger)
+            training_progress=training_progress)
 
     # load latest checkpoint 
     torch.cuda.synchronize()
     dist.barrier()
     state_tracker.load_latest()
 
-    if config['debug'] == True:
+    if kwargs['debug'] == True:
         num_epochs = 2
         num_shards = 2
         training_progress.epoch = 0
@@ -255,14 +236,15 @@ def train(config):
                 logger.info(f'training shard: {training_progress.shard}')
 
                 shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-                train_loader = get_train_loader(shard, config)
+                train_loader = get_loader(shard, config)
 
                 train_shard(
                     state_tracker,
                     train_loader,
                     config,
                     writer,
-                    logger=logger
+                    logger=logger,
+                    **kwargs
                     )
 
                 torch.cuda.synchronize()
@@ -277,7 +259,8 @@ def train(config):
                         config, 
                         writer, 
                         state_tracker['training_progress'],
-                        logger=logger)
+                        logger=logger,
+                        **kwargs)
 
                 training_progress.shard += 1
             training_progress.epoch += 1
@@ -291,16 +274,15 @@ def train(config):
             state_tracker.save()
         logger.info('training interrupted')
     except Exception as e:
-        if config['debug'] == True:
+        if kwargs['debug'] == True:
             pdb.post_mortem()
         logger.exception(e)
     finally:
         dist.destroy_process_group()
 
 
-def training_worker(rank, config):
+def training_worker(rank, config, progress, debug):
     world_size = config['num_gpus']
-
     host_name = config['hostname']
     port = config['port']
 
@@ -313,7 +295,7 @@ def training_worker(rank, config):
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-    train(config)
+    train(config, progress=progress, debug=debug)
 
 
 if __name__ == "__main__":
@@ -321,8 +303,9 @@ if __name__ == "__main__":
     parser.add_argument('config_path', type=str)
 
     parser.add_argument('--run_name', type=str, default=None)
-    parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=None)
+    parser.add_argument('--debug', action='store_true', default=False)
+    parser.add_argument('--progress', action='store_true', default=False)
     args = parser.parse_args()
 
     config = load_config(args.config_path)
@@ -333,7 +316,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    logger = make_logger(config, rank=-1, debug=config['debug'])
+    logger = make_logger(config, rank=-1, debug=args.debug)
     logger.info(f'logdir: {logdir}')
     logger.info(f'checkdir: {checkdir}')
 
@@ -346,7 +329,7 @@ if __name__ == "__main__":
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 
-            args=(config,),
+            args=(config, args.progress, args.debug),
             nprocs = config['num_gpus'],
             join=True)
 

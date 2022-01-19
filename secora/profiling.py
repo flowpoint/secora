@@ -20,7 +20,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from model import BiEmbeddingModel
-from data import preprocess_split
+from data import *
 from config import load_config, overwrite_config
 from losses import contrastive_loss, mrr
 from tracking import *
@@ -29,74 +29,55 @@ from infer import *
 from SM3 import SM3
 
 
+'''
+usage like:
+    python secora/profiling.py configs/config.yml --debug --modes train --modes validation --batch_size 8
+'''
+
+
 def train_step(model, optim, batch, config, device='cpu'):
-    input_ids = batch['input_ids'].to(device)
-    token_type_ids = batch['token_type_ids'].to(device)
-    attention_mask = batch['attention_mask'].to(device)
-
     # a step without syncing, simulates grad accum
-    loss = contrastive_loss(model, input_ids, token_type_ids, attention_mask, config)
-
     with model.no_sync():
+        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask'],
+        loss = contrastive_loss(model, model_inputs, config)
         loss.backward()
 
     # a step without syncing, simulates grad accums optimization step
-    loss = contrastive_loss(model, input_ids, token_type_ids, attention_mask, config)
+    loss = contrastive_loss(model, model_inputs, config)
     loss.backward()
 
     optim.step()
     optim.zero_grad(set_to_none=True)
 
 
-def profile(config, logger, modes):
+def profile(config, logger, modes, **kwargs):
     rank = dist.get_rank()
 
-    if 'train' in modes:
-        train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50)
+    logger.info('building DDP model')
+    m = BiEmbeddingModel(config).to(rank)
+    model = DDP(m, device_ids=[rank])
 
-        train_sampler = DistributedSampler(train_set, drop_last=True)
-        train_loader = DataLoader(
-                train_set, 
-                batch_size=config['batch_size'], 
-                shuffle=(train_sampler is None),
-                drop_last=True, 
-                pin_memory=True, 
-                # workers need to use the spawn or forkserver method in a distributed setting
-                num_workers=4, 
-                multiprocessing_context='spawn',
-                persistent_workers=True, 
-                sampler=train_sampler)
+    #needed for warmup anyway
+    train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50, **kwargs)
+    train_loader = get_loader(train_set, config)
+    train_iter = iter(deviceloader(train_loader, rank))
 
     if 'validation' in modes or 'embedding' in modes:
-        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5)
+        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5, **kwargs)
+        valid_loader = get_loader(valid_set, config)
 
-        valid_sampler = DistributedSampler(valid_set, drop_last=True, shuffle=False)
-        valid_loader = DataLoader(
-                valid_set, 
-                batch_size=config['batch_size'], 
-                shuffle=(valid_sampler is None), 
-                drop_last=True, 
-                pin_memory=True, 
-                # workers need to use the spawn or forkserver method in a distributed setting
-                num_workers=4, 
-                multiprocessing_context='spawn',
-                persistent_workers=True,
-                sampler=valid_sampler)
+    # some warmup
+    logger.info('warming up cuda benchmark on train set')
+    for step, batch in zip(range(12), train_loader):
+        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
+        model(*model_inputs)
 
-
-    m = BiEmbeddingModel(config).to(rank)
-    
-    if 'train' in modes and config['cuda_graphs'] == True:
-        batch = next(iter(train_loader))
-
-        input_ids = batch['input_ids'].to(rank)
-        token_type_ids = batch['token_type_ids'].to(rank)
-        attention_mask = batch['attention_mask'].to(rank)
-
-        dummy_inputs = (input_ids, token_type_ids, attention_mask)
+    if config['cuda_graphs'] == True:
+        logger.info('cuda_graphs is True: building the cuda graph')
+        del(m)
+        m = BiEmbeddingModel(config).to(rank)
         m.make_graphed(dummy_inputs)
-
-    model = DDP(m, device_ids=[rank])
+        model = DDP(m, device_ids=[rank])
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
@@ -120,9 +101,9 @@ def profile(config, logger, modes):
     trace_path = os.path.join(config['logdir'], config['name'], 'profile_trace.json')
     stacks_path = os.path.join(config['logdir'], config['name'], 'profile_stacks.txt')
 
-    if 'validation' in modes and not 'embedding' in modes:
-        code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
-        doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
+
+    code_embedding = None
+    doc_embedding = None
 
     torch.cuda.synchronize()
     dist.barrier()
@@ -142,16 +123,16 @@ def profile(config, logger, modes):
             profiler.ProfilerActivity.CUDA,
         ]) as p:
 
-        for idx, batch in zip(range(10), train_loader):
+        for idx in range(10):
             logger.info(f'step {idx}')
             if 'train' in modes:
                 model.train()
                 logger.info(f'train_step')
-                train_step(model, optim, batch, config, device=rank)
+                train_step(model, optim, next(train_iter), config, device=rank)
 
-            if 'embedding' in modes:
-                code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
-                doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
+            if 'embedding' in modes or ('validation' in modes and code_embedding is None):
+                code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank, **kwargs)
+                doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank, **kwargs)
 
             if 'validation' in modes:
                 with model.no_sync():
@@ -177,7 +158,7 @@ def profile(config, logger, modes):
     logger.info(f'profiling finished')
 
 
-def profiling_worker(rank, config, modes):
+def profiling_worker(rank, config, modes, debug):
     world_size = config['num_gpus']
     host_name = config['hostname']
     port = config['port']
@@ -187,21 +168,20 @@ def profiling_worker(rank, config, modes):
 
     # initialize the process group
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
-    logger = make_logger(config, rank=rank)
-    logger.info('start profiling worker')
-
     rank = dist.get_rank()
     torch.cuda.set_device(rank)
-    profile(config, logger, modes)
+
+    logger = make_logger(config, rank=rank, debug=debug)
+    logger.info('start profiling worker')
+
+    profile(config, logger, modes, progress=False)
 
 
 def copytest():
     rank = dist.get_rank()
-    world_size = dist.get_world_size()
 
     x = torch.rand([100000,128], device=rank)
-
-    x2 = [torch.zeros_like(x, dtype=torch.float32, device=rank)] * world_size
+    x2 = [torch.zeros_like(x, dtype=torch.float32, device=rank)] * dist.get_world_size()
     dist.all_gather(x2, x)
 
     torch.cuda.synchronize()
@@ -209,13 +189,13 @@ def copytest():
     if rank == 0:
         doc_cpu = [x.cpu().numpy() for x in all_doc_embeddings]
         full_doc_embedding_space = np.concatenate(doc_cpu, 0).astype(np.float32)
-    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual profiling script.')
     parser.add_argument('config_path', type=str)
     parser.add_argument('--modes', type=str, action='append', default=[])
-    parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--run_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', type=bool, default=False)
     args = parser.parse_args()
@@ -225,7 +205,6 @@ if __name__ == "__main__":
 
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
-
 
     modes = args.modes
 
@@ -238,8 +217,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    logger = make_logger(config, log_all_ranks=True, rank=-1)
-
+    logger = make_logger(config, rank=-1, debug=args.debug)
     logger.info(f'logdir: {logdir}')
     logger.info(f'checkdir: {checkdir}')
 
@@ -252,6 +230,6 @@ if __name__ == "__main__":
 
     mp.set_start_method('spawn')
     mp.spawn(profiling_worker, 
-            args=(config, modes),
+            args=(config, modes, args.debug),
             nprocs = config['num_gpus'],
             join=True)

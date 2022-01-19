@@ -14,7 +14,7 @@ from tqdm import tqdm
 from losses import mrr
 
 
-def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu'):
+def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu', **kwargs):
     rank = dist.get_rank()
 
     batch_size = data_loader.batch_size
@@ -23,7 +23,7 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
     embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=rank)
     model.eval()
 
-    if rank == 0:
+    if rank == 0 and kwargs['progress'] == True:
         bar = tqdm(total=len(data_loader), unit=' batch', desc=f'building embeddings: {feature_prefix}', smoothing=0.03)
 
     for i, batch in enumerate(data_loader):
@@ -43,7 +43,7 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
         sample_embedding = sample_embedding[:,0]
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach()
 
-        if rank == 0:
+        if rank == 0 and kwargs['progress'] == True:
             bar.update(n=1)
 
     return embedding_space
@@ -64,7 +64,6 @@ def k_nearest_neighbors(
         value_vectors,
         embedding_size,
         top_k,
-        logger=None,
         **kwargs):
 
     rank = dist.get_rank()
@@ -80,9 +79,7 @@ def k_nearest_neighbors(
         q_space = torch.cat(q_gathered, -2).to('cpu').numpy()
         v_space = torch.cat(v_gathered, -2).to('cpu').numpy()
 
-        if logger is None:
-            logger = logging.getLogger(__name__)
-
+        logger = kwargs['logger']
         logger.debug('building knn index')
         logger.debug(f'q_space: {q_space.shape}')
         logger.debug(f'v_space: {v_space.shape}')
@@ -112,8 +109,8 @@ def validate(
 
     with model.no_sync():
         with torch.no_grad():
-            code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank)
-            doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank)
+            code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank, **kwargs)
+            doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank, **kwargs)
 
             dist.barrier()
             distances, neighbors = k_nearest_neighbors(

@@ -1,10 +1,14 @@
 from itertools import cycle
 
+import torch
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
+import datasets
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from torch.utils.data.distributed import DistributedSampler
+
 
 
 
@@ -53,13 +57,14 @@ def tokenize_valid_sample(tokenizer, batch, config):
     return proc_batch
 
 
-def preprocess_split(split, config, limit_samples=-1):
+def preprocess_split(split, config, limit_samples=-1, **kwargs):
     if split not in ["train", "validation"]:
         raise RuntimeError(f"invalid dataset split: {split}")
 
+    datasets.set_progress_bar_enabled(kwargs['progress'])
     tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
-
     dataset = load_dataset("code_search_net")[split]
+
     if limit_samples >= 1:
         dataset = dataset.select(range(limit_samples))
 
@@ -93,18 +98,26 @@ def preprocess_split(split, config, limit_samples=-1):
     return dataset
 
 
-def get_train_loader(shard, config, persistent=True):
-    train_sampler = DistributedSampler(shard, drop_last=True, shuffle=False)
-    train_loader = DataLoader(
-            shard, 
+def get_loader(dataset, config, **kwargs):
+    sampler = DistributedSampler(dataset, drop_last=True, shuffle=False)
+    loader = DataLoader(
+            dataset, 
             batch_size=config['batch_size'], 
             shuffle=False,
             drop_last=True, 
             pin_memory=True, 
             # workers need to use the spawn or forkserver method in a distributed setting
-            num_workers=1, 
+            num_workers=2, 
             multiprocessing_context='spawn',
-            persistent_workers=persistent, 
-            sampler=train_sampler)
+            persistent_workers=True, 
+            sampler=sampler)
 
-    return train_loader
+    return loader
+
+
+def deviceloader(loader, device):
+    for b in loader:
+        for k, v in b.items():
+            if isinstance(v, torch.Tensor):
+                b[k] = v.to(device)
+        yield b

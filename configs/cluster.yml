@@ -1,12 +1,12 @@
 hostname: localhost
-port: 12355
+port: 42855
 
 num_gpus: 'auto'
 
 name: 'cluster_run_name'
 
-batch_size: 64
-infer_batch_size: 64
+batch_size: 32
+infer_batch_size: 32
 
 seed: 42
 epochs: 1
