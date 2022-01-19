@@ -49,16 +49,23 @@ class StateTracker:
             raise RuntimeError('config needs to have a checkpoint_dir')
         if 'max_checkpoints' not in config.keys():
             raise RuntimeError('config needs to have a max_checkpoints')
-        if not config['max_checkpoints'] >= 1:
-            raise RuntimeError('max_checkpoints has to be greater than 1')
+        if not config['max_checkpoints'] >= 0:
+            raise RuntimeError('max_checkpoints has to be positive')
 
         self.checkpoint_dir = os.path.join(config['checkpoint_dir'], config['name'])
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.max_checkpoints = self.config['max_checkpoints']
+
 
         if logger is None:
             self.logger = logging.getLogger(__name__)
         else:
             self.logger = logger
+
+        if self.max_checkpoints == 0:
+            self.logger.warning("max_checkpoints is 0, no checkpoints will be saved")
+        if self.max_checkpoints < 0:
+            raise ValueError('invalid value for max_checkpoings in config')
 
         for k, o in kwargs.items():
             if "state_dict" not in dir(o):

@@ -142,7 +142,7 @@ def profile(config, logger, modes):
             profiler.ProfilerActivity.CUDA,
         ]) as p:
 
-        for idx, batch in zip(range(8), train_loader):
+        for idx, batch in zip(range(10), train_loader):
             logger.info(f'step {idx}')
             if 'train' in modes:
                 model.train()
@@ -173,6 +173,8 @@ def profile(config, logger, modes):
         print(p.key_averages().table(
             sort_by="self_cuda_time_total", row_limit=-1))
         p.export_stacks(stacks_path, "self_cuda_time_total")
+        
+    logger.info(f'profiling finished')
 
 
 def profiling_worker(rank, config, modes):

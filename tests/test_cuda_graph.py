@@ -165,6 +165,7 @@ def main():
             join=True)
 
 
+@unittest.skip('skip test_cuda_graph')
 class TestExample(unittest.TestCase):
     def test_example(self):
         main()

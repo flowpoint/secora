@@ -2,9 +2,9 @@
 
 #SBATCH --partition=wr14          # partition (queue)
 #SBATCH --nodes=1                # number of nodes
-#SBATCH --ntasks-per-node=32     # number of tasks per node
-#SBATCH --mem=20G                 # memory per node in MB (different units with suffix K|M|G|T)
-#SBATCH --time=00:10:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
+#SBATCH --ntasks-per-node=12     # number of tasks per node
+#SBATCH --mem=48G                 # memory per node in MB (different units with suffix K|M|G|T)
+#SBATCH --time=00:30:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
 #SBATCH --output=slurm_logs/slurm_debug.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
 #SBATCH --error=slurm_logs/slurm_debug.%j.err     # filename for STDERR
 
@@ -29,4 +29,4 @@ export CUDA_LAUNCH_BLOCKING=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 32 --run_name debug_cluster_train
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_train3
