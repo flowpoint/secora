@@ -24,7 +24,7 @@ top_k:  5
 logdir: "./output"
 checkpoint_dir: "./output"
 
-max_checkpoints: 10
+max_checkpoints: 0
 
 cuda_graphs: False
 

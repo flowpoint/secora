@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import math
 
 def contrastive_loss(model, model_inputs, config):
     ''' the loss used by simcse
@@ -52,3 +53,20 @@ def mrr(true_ids: [str], rankings: [[str]]):
     return np.mean(list(starmap(rr, zip(true_ids, rankings))))
 
 
+
+
+def ndcg(lst):
+    ''' author kai '''
+
+    score = 0
+    ideal_score = 0
+    ideal_list = sorted(lst, reverse=True)
+    for i in range(0, len(lst)):
+        print(i)
+    score += lst[i]/math.log2(i+2)
+    ideal_score += ideal_list[i]/math.log2(i+2)
+    score = score/ideal_score
+    return score
+
+    #list=[2,3,3,1,2]
+    #print(ndcg(list))

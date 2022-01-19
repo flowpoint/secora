@@ -12,6 +12,7 @@ import torch.distributed as dist
 from tqdm import tqdm
 
 from losses import mrr
+from data import deviceloader
 
 
 def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu', **kwargs):
@@ -26,18 +27,16 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
     if rank == 0 and kwargs['progress'] == True:
         bar = tqdm(total=len(data_loader), unit=' batch', desc=f'building embeddings: {feature_prefix}', smoothing=0.03)
 
-    for i, batch in enumerate(data_loader):
-        input_ids = batch[feature_prefix + 'input_ids'].to(device)
-        token_type_ids = batch[feature_prefix + 'token_type_ids'].to(device)
-        attention_mask = batch[feature_prefix + 'attention_mask'].to(device)
+    for i, batch in enumerate(deviceloader(data_loader, rank)):
+        model_inputs = (
+                batch[feature_prefix + 'input_ids'], 
+                batch[feature_prefix + 'token_type_ids'],
+                batch[feature_prefix + 'attention_mask'])
 
         #if i == 0:
         #    model = torch.jit.trace(model.forward, (input_ids, token_type_ids, attention_mask))
 
-        sample_embedding = model(
-                input_ids,
-                token_type_ids,
-                attention_mask)
+        sample_embedding = model(*model_inputs)
 
         # because it's an bi embedding model during distributed training
         sample_embedding = sample_embedding[:,0]

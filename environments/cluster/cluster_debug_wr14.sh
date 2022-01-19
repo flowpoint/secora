@@ -29,4 +29,4 @@ export CUDA_LAUNCH_BLOCKING=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_train3
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_1

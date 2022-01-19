@@ -70,6 +70,8 @@ def train_shard(
                 desc='train_shard', 
                 smoothing=0.03)
 
+    heartbeat = time()
+
     try:
         for step, batch in enumerate(deviceloader(train_loader, rank)):
             model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
@@ -84,6 +86,10 @@ def train_shard(
 
             if rank == 0 and kwargs['progress'] == True:
                 bar.update(n=1)
+
+            if rank == 0 and time() - heartbeat > 10:
+                logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {step}/{len(train_loader)}")
+                heartbeat = time()
 
             # only sync before optimizer step
             if (step+1) % grad_accum != 0:
@@ -143,10 +149,11 @@ def train(config, **kwargs):
         train_set = preprocess_split('train', config, **kwargs)
         valid_set = preprocess_split('validation', config, **kwargs)
 
+    # both sets arent shuffled, shuffle train set every epoch manually
     train_loader = get_loader(train_set, config)
-
-    # don't shuffle validation set!
     valid_loader = get_loader(valid_set, config, **kwargs)
+
+    logger.info('building model')
     m = BiEmbeddingModel(config).to(rank)
 
     logger.info('warming up cuda benchmark')
@@ -156,11 +163,6 @@ def train(config, **kwargs):
 
     if config['cuda_graphs'] == True:
         logger.info('cuda_graphs is True: building the cuda graph')
-        m = BiEmbeddingModel(config).to(rank)
-
-        batch = next(iter(deviceloader(train_loader, rank)))
-
-        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
         m.make_graphed(model_inputs)
 
     logger.info('building DDP model')

@@ -28,12 +28,10 @@ from infer import *
 
 from SM3 import SM3
 
-
 '''
 usage like:
     python secora/profiling.py configs/config.yml --debug --modes train --modes validation --batch_size 8
 '''
-
 
 def train_step(model, optim, batch, config, device='cpu'):
     # a step without syncing, simulates grad accum
@@ -53,10 +51,6 @@ def train_step(model, optim, batch, config, device='cpu'):
 def profile(config, logger, modes, **kwargs):
     rank = dist.get_rank()
 
-    logger.info('building DDP model')
-    m = BiEmbeddingModel(config).to(rank)
-    model = DDP(m, device_ids=[rank])
-
     #needed for warmup anyway
     train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50, **kwargs)
     train_loader = get_loader(train_set, config)
@@ -66,18 +60,23 @@ def profile(config, logger, modes, **kwargs):
         valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5, **kwargs)
         valid_loader = get_loader(valid_set, config)
 
+    logger.info('building model')
+    m = BiEmbeddingModel(config).to(rank)
+    #model = DDP(m, device_ids=[rank])
+
     # some warmup
     logger.info('warming up cuda benchmark on train set')
-    for step, batch in zip(range(12), train_loader):
+    for step, batch in zip(range(12), deviceloader(train_loader,rank)):
         model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
-        model(*model_inputs)
+        m(*model_inputs)
 
     if config['cuda_graphs'] == True:
         logger.info('cuda_graphs is True: building the cuda graph')
-        del(m)
-        m = BiEmbeddingModel(config).to(rank)
-        m.make_graphed(dummy_inputs)
-        model = DDP(m, device_ids=[rank])
+        #m = BiEmbeddingModel(config).to(rank)
+        m.make_graphed(model_inputs)
+
+    logger.info('building DDP model')
+    model = DDP(m, device_ids=[rank])
 
     if config['finetune_mode'] == 'all':
         params = model.parameters()
