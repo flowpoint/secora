@@ -107,7 +107,7 @@ def get_loader(dataset, config, **kwargs):
             drop_last=True, 
             pin_memory=True, 
             # workers need to use the spawn or forkserver method in a distributed setting
-            num_workers=2, 
+            num_workers=6, 
             multiprocessing_context='spawn',
             persistent_workers=True, 
             sampler=sampler)

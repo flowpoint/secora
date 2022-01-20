@@ -38,8 +38,11 @@ cuda_graphs: True
 preprocess_cores: 10
 preprocess_mode: concat
 
-max_input_tokens: 200
+max_input_tokens: 256
 
 optimizer: adam
 
 precision: mixed
+
+schedule: linear
+#schedule: constant

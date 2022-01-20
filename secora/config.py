@@ -28,6 +28,7 @@ preprocess_mode
 max_input_tokens
 optimizer
 precision
+lr_schedule
 '''
 
 def check(config):
@@ -79,7 +80,7 @@ def load_config(path):
 
 
 def overwrite_config(args, config):
-    if args.run_name is not None and args.run_name is not "":
+    if args.run_name is not None and args.run_name != "":
         config['name'] = args.run_name
 
     if args.batch_size is not None:

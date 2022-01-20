@@ -108,13 +108,13 @@ def profile(config, logger, modes, **kwargs):
     dist.barrier()
 
     with profiler.profile(
-        with_stack=True, 
-        profile_memory=True, 
-        record_shapes=True,
+        #with_stack=True, 
+        #profile_memory=True, 
+        #record_shapes=True,
         on_trace_ready=profiler.tensorboard_trace_handler(tensorboard_run_path),
         schedule=torch.profiler.schedule(
-            skip_first=4,
-            wait=1,
+            skip_first=0,
+            wait=5,
             warmup=1,
             active=2),
         activities=[
@@ -125,9 +125,13 @@ def profile(config, logger, modes, **kwargs):
         for idx in range(10):
             logger.info(f'step {idx}')
             if 'train' in modes:
+                torch.cuda.synchronize()
+                dist.barrier()
                 model.train()
                 logger.info(f'train_step')
                 train_step(model, optim, next(train_iter), config, device=rank)
+                torch.cuda.synchronize()
+                dist.barrier()
 
             if 'embedding' in modes or ('validation' in modes and code_embedding is None):
                 code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank, **kwargs)
@@ -152,7 +156,7 @@ def profile(config, logger, modes, **kwargs):
     if rank == 0:
         print(p.key_averages().table(
             sort_by="self_cuda_time_total", row_limit=-1))
-        p.export_stacks(stacks_path, "self_cuda_time_total")
+        #p.export_stacks(stacks_path, "self_cuda_time_total")
         
     logger.info(f'profiling finished')
 
@@ -162,18 +166,20 @@ def profiling_worker(rank, config, modes, debug):
     host_name = config['hostname']
     port = config['port']
 
-    os.environ['MASTER_ADDR'] = host_name
-    os.environ['MASTER_PORT'] = str(port)
+    #os.environ['MASTER_ADDR'] = host_name
+    #os.environ['MASTER_PORT'] = str(port)
 
-    # initialize the process group
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
-    rank = dist.get_rank()
-    torch.cuda.set_device(rank)
+    os.environ.pop('MASTER_ADDR', None)
+    os.environ.pop('PORT', None)
+    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
 
-    logger = make_logger(config, rank=rank, debug=debug)
-    logger.info('start profiling worker')
 
-    profile(config, logger, modes, progress=False)
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        # initialize the process group
+        dist.init_process_group('nccl', rank=rank, world_size=world_size, init_method='file://' + os.path.join(tmpdirname, 'torch_sharedfile'))
+        torch.cuda.set_device(rank)
+        
+        profile(config, logger, modes, progress=False)
 
 
 def copytest():

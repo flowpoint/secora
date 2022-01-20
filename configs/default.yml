@@ -4,14 +4,14 @@ port: 12355
 
 num_gpus: 'auto'
 
-name: 'run_name'
+name: 'local_1ep_full'
 
 batch_size: 8
 infer_batch_size: 8
 
 seed: 42
 epochs: 1
-shards: 20
+shards: 15
 
 grad_accum: 64 # counted in batches
 
@@ -24,7 +24,7 @@ top_k:  5
 logdir: "./output"
 checkpoint_dir: "./output"
 
-max_checkpoints: 0
+max_checkpoints: 20
 
 cuda_graphs: False
 
@@ -45,3 +45,5 @@ max_input_tokens: 256
 optimizer: adam
 
 precision: mixed
+
+lr_schedule: constant

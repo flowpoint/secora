@@ -2,9 +2,9 @@
 
 #SBATCH --partition=gpu4          # partition (queue)
 #SBATCH --nodes=1                # number of nodes
-#SBATCH --ntasks-per-node=24     # number of tasks per node
-#SBATCH --mem=72G                 # memory per node in MB (different units with suffix K|M|G|T)
-#SBATCH --time=00:30:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
+#SBATCH --ntasks-per-node=32     # number of tasks per node
+#SBATCH --mem=96G                 # memory per node in MB (different units with suffix K|M|G|T)
+#SBATCH --time=00:50:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
 #SBATCH --output=slurm_logs/slurm_debug.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
 #SBATCH --error=slurm_logs/slurm_debug.%j.err     # filename for STDERR
 
@@ -29,4 +29,10 @@ export CUDA_LAUNCH_BLOCKING=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 64 --run_name debug_cluster_gpu4_2
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_gpu4_8
+
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 16 --run_name debug_cluster_gpu4_9
+
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 24 --run_name debug_cluster_gpu4_10
+
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 32 --run_name debug_cluster_gpu4_11

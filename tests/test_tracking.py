@@ -14,8 +14,20 @@ class MockModel:
     def load_state_dict(self, d):
         self.state = d
 
+class MockLogger:
+    def debug(self,*args, **kwargs):
+        pass
+    def info(self,*args, **kwargs):
+        pass
+    def warning(self,*args, **kwargs):
+        pass
+    def exception(self,*args, **kwargs):
+        pass
 
 class TestTracker(unittest.TestCase):
+    def setUp(self):
+        self.logger = MockLogger()
+
     def test_checkpoint_count(self):
         model = MockModel()
         for i in [0,1,10]:
@@ -26,7 +38,7 @@ class TestTracker(unittest.TestCase):
                     'name': 'model'
                         }
 
-                tracker = StateTracker(config, model=model)
+                tracker = StateTracker(config, model=model, logger=self.logger)
 
                 path = os.path.join(tmpdirname, 'model')
                 self.assertTrue(os.listdir(path) == [])
@@ -46,7 +58,7 @@ class TestTracker(unittest.TestCase):
                 'name': 'model'
                 }
 
-            tracker = StateTracker(config, model=model)
+            tracker = StateTracker(config, model=model, logger=self.logger)
             
             path = os.path.join(tmpdirname, 'model')
             self.assertTrue(os.listdir(path) == [])
@@ -55,7 +67,7 @@ class TestTracker(unittest.TestCase):
             tracker.save()
 
             model2 = MockModel()
-            tracker2 = StateTracker(config, model=model2)
+            tracker2 = StateTracker(config, model=model2, logger=self.logger)
             tracker2.load_latest()
             self.assertEqual(model2.state, model.state)
             self.assertEqual(tracker['model'].state, model.state)

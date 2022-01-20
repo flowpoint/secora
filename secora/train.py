@@ -1,6 +1,8 @@
 import os
 import sys
 
+import tempfile
+
 import time
 from time import time
 
@@ -21,12 +23,13 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.utils import clip_grad_norm_
 from torch.cuda.amp import autocast, GradScaler
+from torch.optim import lr_scheduler
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from transformers import get_linear_schedule_with_warmup
+import transformers
 
 from model import *
 from data import *
@@ -138,11 +141,11 @@ def train_shard(
 
 def train(config, **kwargs):
     rank = dist.get_rank()
-    logger = make_logger(config, debug=kwargs['debug'], rank=rank)
     writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+    logger = kwargs['logger']
 
     if kwargs['debug'] == True:
-        limit = 2*config['grad_accum']*config['batch_size']
+        limit = 10*config['grad_accum']*config['batch_size']
         train_set = preprocess_split('train', config, limit_samples=limit, **kwargs)
         valid_set = preprocess_split('validation', config, limit_samples=limit, **kwargs)
     else:
@@ -160,10 +163,16 @@ def train(config, **kwargs):
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
         model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
         m(*model_inputs)
+        torch.cuda.synchronize()
+        dist.barrier()
 
     if config['cuda_graphs'] == True:
         logger.info('cuda_graphs is True: building the cuda graph')
+        torch.cuda.synchronize()
+        dist.barrier()
         m.make_graphed(model_inputs)
+        torch.cuda.synchronize()
+        dist.barrier()
 
     logger.info('building DDP model')
     model = DDP(m, device_ids=[rank])
@@ -188,10 +197,18 @@ def train(config, **kwargs):
     num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
 
-    scheduler = get_linear_schedule_with_warmup(
-            optim,
-            num_warmup_steps=num_warmup_steps,
-            num_training_steps=num_training_steps)
+    if config['lr_schedule'] == 'linear':
+        scheduler = transformers.get_linear_schedule_with_warmup(
+                optim,
+                num_warmup_steps=num_warmup_steps,
+                num_training_steps=num_training_steps)
+    elif config['lr_schedule'] == 'constant':
+        scheduler = transformers.get_constant_schedule_with_warmup(
+                optim,
+                num_warmup_steps=num_warmup_steps
+                )
+    else:
+        raise ValueError('invalid lr_schedule')
 
     scaler = GradScaler()
 
@@ -228,6 +245,7 @@ def train(config, **kwargs):
 
     rank = dist.get_rank()
 
+    logger.info(f'starting training')
     try:
         # training
         while(training_progress.epoch < num_epochs):
@@ -245,7 +263,6 @@ def train(config, **kwargs):
                     train_loader,
                     config,
                     writer,
-                    logger=logger,
                     **kwargs
                     )
 
@@ -261,7 +278,6 @@ def train(config, **kwargs):
                         config, 
                         writer, 
                         state_tracker['training_progress'],
-                        logger=logger,
                         **kwargs)
 
                 training_progress.shard += 1
@@ -272,15 +288,11 @@ def train(config, **kwargs):
         dist.barrier(group=dist.group.WORLD)
 
     except KeyboardInterrupt as e:
+        torch.cuda.synchronize()
+        dist.barrier()
         if rank == 0:
             state_tracker.save()
         logger.info('training interrupted')
-    except Exception as e:
-        if kwargs['debug'] == True:
-            pdb.post_mortem()
-        logger.exception(e)
-    finally:
-        dist.destroy_process_group()
 
 
 def training_worker(rank, config, progress, debug):
@@ -288,16 +300,38 @@ def training_worker(rank, config, progress, debug):
     host_name = config['hostname']
     port = config['port']
 
-    os.environ['MASTER_ADDR'] = host_name
-    os.environ['MASTER_PORT'] = str(port)
-    
-    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-    
-    # initialize the process group
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
+    #os.environ['MASTER_ADDR'] = host_name
+    #os.environ['MASTER_PORT'] = str(port)
+    os.environ.pop('MASTER_ADDR', None)
+    os.environ.pop('PORT', None)
 
-    train(config, progress=progress, debug=debug)
+    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+
+    logger = make_logger(config, debug=debug, rank=rank)
+
+    logdir = os.path.join(config['logdir'], config['name'])
+    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+
+    if rank == 0:
+        os.makedirs(logdir, exist_ok=True)
+        os.makedirs(checkdir, exist_ok=True)
+
+    logger.info(f'logdir: {logdir}')
+    logger.info(f'checkdir: {checkdir}')
+
+    tmpdir = tempfile.TemporaryDirectory() 
+    try:
+        # initialize the process group
+        dist.init_process_group('nccl', rank=rank, world_size=world_size, init_method='file://' + os.path.join(tmpdir.name, 'torch_sharedfile'))
+        #dist.init_process_group('nccl', rank=rank, world_size=world_size)
+        torch.cuda.set_device(rank)
+
+        train(config, progress=progress, debug=debug, logger=logger)
+    except Exception as e:
+        logger.exception(e)
+    finally:
+        dist.destroy_process_group()
+        tmpdir.cleanup()
 
 
 if __name__ == "__main__":
@@ -312,15 +346,6 @@ if __name__ == "__main__":
 
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
-
-    logdir = os.path.join(config['logdir'], config['name'])
-    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
-    os.makedirs(logdir, exist_ok=True)
-    os.makedirs(checkdir, exist_ok=True)
-
-    logger = make_logger(config, rank=-1, debug=args.debug)
-    logger.info(f'logdir: {logdir}')
-    logger.info(f'checkdir: {checkdir}')
 
     np.random.seed(config['seed'])
     torch.cuda.manual_seed_all(config['seed'])
