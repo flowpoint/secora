@@ -35,7 +35,7 @@ import transformers
 
 from model import *
 from data import *
-from config import load_config, overwrite_config
+from config import load_config, overwrite_config, save_config
 from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
 from tracking import *
@@ -138,12 +138,15 @@ def train_shard(
 
 def train(config, **kwargs):
     rank = dist.get_rank()
-    writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+    if rank == 0:
+        path = os.path.join(config['logdir'], config['name'], 'config.yml')
+        save_config(config, path)
+        writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
     logger = kwargs['logger']
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        limit = 10*config['grad_accum']*config['batch_size']
+        limit = 5*config['grad_accum']*config['batch_size']
         train_set = preprocess_split('train', config, limit_samples=limit, **kwargs)
         valid_set = preprocess_split('validation', config, limit_samples=limit, **kwargs)
     else:
@@ -264,6 +267,8 @@ def train(config, **kwargs):
                 **kwargs
                 )
 
+            training_progress.shard += 1
+
             torch.cuda.synchronize()
             dist.barrier()
             if rank == 0:
@@ -278,7 +283,6 @@ def train(config, **kwargs):
                     state_tracker['training_progress'],
                     **kwargs)
 
-            training_progress.shard += 1
         training_progress.epoch += 1
         training_progress.shard = 0
 
@@ -318,9 +322,10 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
-    args = parser.parse_args()
+    parser.add_argument('--port', type=int, default=random.randint(10000, 15000))
 
-    master_port = str(random.randint(10000, 15000))
+    args = parser.parse_args()
+    master_port = str(args.port)
 
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
@@ -343,7 +348,3 @@ if __name__ == "__main__":
             nprocs = config['num_gpus'],
             join=True)
 
-#neighsamples = valid_set_tokenized.select(neighbors.flatten())['proc_url']
-#for dist, s, rid in zip(distances.flatten(), neighsamples)
-#for k in range(top_k)
-#valid_set.select(neighbors)

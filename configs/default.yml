@@ -34,7 +34,7 @@ learning_rate: 1e-5
 finetune_mode: all
 
 languages:
-    - python
+  - python
 
 
 preprocess_cores: 10

@@ -90,6 +90,11 @@ def overwrite_config(args, config):
 
     return config
 
+def save_config(config, path):
+    with open(path, 'w') as f:
+        f.write(yaml.dump(config))
+
+
 if __name__ == "__main__":
     desc = 'config utility, by default, checks config validity'
     parser = argparse.ArgumentParser(description=desc)
