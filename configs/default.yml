@@ -4,14 +4,14 @@ port: 12355
 
 num_gpus: 'auto'
 
-name: 'local_1ep_full'
+name: 'local_4ep_full_constant_adam_2'
 
 batch_size: 8
 infer_batch_size: 8
 
-seed: 42
-epochs: 1
-shards: 15
+seed: 44
+epochs: 4
+shards: 10
 
 grad_accum: 64 # counted in batches
 
@@ -19,7 +19,7 @@ warmup_batches: 10000
 temp: 0.05
 
 embedding_size: 128
-top_k:  5
+top_k:  10
 
 logdir: "./output"
 checkpoint_dir: "./output"

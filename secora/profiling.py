@@ -2,6 +2,9 @@ import os
 import sys
 from math import ceil
 import argparse
+import tempfile
+import random
+import datetime
 
 import pdb
 
@@ -48,8 +51,9 @@ def train_step(model, optim, batch, config, device='cpu'):
     optim.zero_grad(set_to_none=True)
 
 
-def profile(config, logger, modes, **kwargs):
+def profile(config, modes, **kwargs):
     rank = dist.get_rank()
+    logger = kwargs['logger']
 
     #needed for warmup anyway
     train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50, **kwargs)
@@ -100,15 +104,16 @@ def profile(config, logger, modes, **kwargs):
     trace_path = os.path.join(config['logdir'], config['name'], 'profile_trace.json')
     stacks_path = os.path.join(config['logdir'], config['name'], 'profile_stacks.txt')
 
-
     code_embedding = None
     doc_embedding = None
 
     torch.cuda.synchronize()
     dist.barrier()
 
+    with_stack = False
+
     with profiler.profile(
-        #with_stack=True, 
+        with_stack=with_stack,
         #profile_memory=True, 
         #record_shapes=True,
         on_trace_ready=profiler.tensorboard_trace_handler(tensorboard_run_path),
@@ -153,47 +158,39 @@ def profile(config, logger, modes, **kwargs):
     torch.cuda.synchronize()
     dist.barrier()
 
+
     if rank == 0:
         print(p.key_averages().table(
             sort_by="self_cuda_time_total", row_limit=-1))
-        #p.export_stacks(stacks_path, "self_cuda_time_total")
-        
-    logger.info(f'profiling finished')
-
-
-def profiling_worker(rank, config, modes, debug):
-    world_size = config['num_gpus']
-    host_name = config['hostname']
-    port = config['port']
-
-    #os.environ['MASTER_ADDR'] = host_name
-    #os.environ['MASTER_PORT'] = str(port)
-
-    os.environ.pop('MASTER_ADDR', None)
-    os.environ.pop('PORT', None)
-    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-
-
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        # initialize the process group
-        dist.init_process_group('nccl', rank=rank, world_size=world_size, init_method='file://' + os.path.join(tmpdirname, 'torch_sharedfile'))
-        torch.cuda.set_device(rank)
-        
-        profile(config, logger, modes, progress=False)
-
-
-def copytest():
-    rank = dist.get_rank()
-
-    x = torch.rand([100000,128], device=rank)
-    x2 = [torch.zeros_like(x, dtype=torch.float32, device=rank)] * dist.get_world_size()
-    dist.all_gather(x2, x)
+        if with_stack == True:
+            p.export_stacks(stacks_path, "self_cuda_time_total")
 
     torch.cuda.synchronize()
-    dist.barrier()
-    if rank == 0:
-        doc_cpu = [x.cpu().numpy() for x in all_doc_embeddings]
-        full_doc_embedding_space = np.concatenate(doc_cpu, 0).astype(np.float32)
+    dist.barrier(group=dist.group.WORLD)
+    dist.destroy_process_group()
+
+
+def profiling_worker(rank, config, modes, debug, master_port):
+    world_size = config['num_gpus']
+    host_name = config['hostname']
+    #port = config['port']
+
+    os.environ['MASTER_ADDR'] = host_name
+    os.environ['MASTER_PORT'] = master_port
+
+    #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+    #os.environ.pop('MASTER_ADDR', None)
+    #os.environ.pop('PORT', None)
+    #os.environ.pop('NCCL_ASYNC_ERROR_HANDLING', None) 
+
+    # this needs a filesystem that has fnctl
+    #tmpdir = tempfile.TemporaryDirectory(prefix='/home/fhoels2s/tmp/') 
+    # initialize the process group
+    #dist.init_process_group('nccl', rank=rank, world_size=world_size, init_method='file://' + os.path.join(tmpdir.name, 'torch_sharedfile'), timeout=datetime.timedelta(65))
+    dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(65))
+    logger = make_logger(config, debug=debug, rank=rank)
+    torch.cuda.set_device(rank)
+    profile(config, modes, progress=False, debug=debug, logger=logger)
 
 
 if __name__ == "__main__":
@@ -211,20 +208,17 @@ if __name__ == "__main__":
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
 
-    modes = args.modes
-
-    avail_modes = ['train', 'embedding', 'validation']
-    if any([m not in avail_modes for m in modes]):
-        raise RuntimeError('only the modes train, embedding, validation are supported')
-
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    logger = make_logger(config, rank=-1, debug=args.debug)
-    logger.info(f'logdir: {logdir}')
-    logger.info(f'checkdir: {checkdir}')
+    master_port = str(random.randint(10000, 15000))
+    modes = args.modes
+
+    avail_modes = ['train', 'embedding', 'validation']
+    if any([m not in avail_modes for m in modes]):
+        raise RuntimeError('only the modes train, embedding, validation are supported')
 
     np.random.seed(config['seed'])
     torch.cuda.manual_seed_all(config['seed'])
@@ -235,6 +229,6 @@ if __name__ == "__main__":
 
     mp.set_start_method('spawn')
     mp.spawn(profiling_worker, 
-            args=(config, modes, args.debug),
+            args=(config, modes, args.debug, master_port),
             nprocs = config['num_gpus'],
             join=True)

@@ -56,7 +56,7 @@ def load_config(path):
     config['optim'] = yconfig['optimizer']
 
     if yconfig['num_gpus'] == 'auto':
-        config['num_gpus'] = torch.cuda.device_count()
+        config['num_gpus'] = int(torch.cuda.device_count())
     elif torch.cuda.device_count() >= int(yconfig['num_gpus']) >= 0 and torch.cuda.is_available():
         pass
     else:
@@ -69,8 +69,8 @@ def load_config(path):
     if not 'logdir' in yconfig or yconfig['logdir'] == "":
         raise ValueError('checkpoint dir must be specified')
 
-    if yconfig['precision'] == 'mixed' and int(config['num_gpus']) == 0:
-        raise RuntimeError('cant use cuda amp mixed on cpu')
+    #if yconfig['precision'] == 'mixed' and int(config['num_gpus']) == 0:
+    #    raise RuntimeError('cant use cuda amp mixed on cpu')
 
     if not isinstance(config['cuda_graphs'], bool):
         raise RuntimeError('cuda_graphs has to be bool')

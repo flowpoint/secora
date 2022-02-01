@@ -5,8 +5,8 @@ num_gpus: 'auto'
 
 name: 'cluster_run_name'
 
-batch_size: 32
-infer_batch_size: 32
+batch_size: 16
+infer_batch_size: 16
 
 seed: 42
 epochs: 1
@@ -18,7 +18,7 @@ warmup_batches: 10000
 temp: 0.05
 
 embedding_size: 128
-top_k:  5
+top_k:  10
 
 logdir: "../cluster_output"
 checkpoint_dir: "../cluster_output"
@@ -33,7 +33,7 @@ finetune_mode: all
 languages:
     - python
 
-cuda_graphs: True
+cuda_graphs: False
 
 preprocess_cores: 10
 preprocess_mode: concat
@@ -44,5 +44,5 @@ optimizer: adam
 
 precision: mixed
 
-schedule: linear
+lr_schedule: linear
 #schedule: constant

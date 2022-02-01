@@ -23,10 +23,10 @@ export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=1
 
-export CUDA_LAUNCH_BLOCKING=1
+#export CUDA_LAUNCH_BLOCKING=1
 
 #unset NCCL_SOCKET_IFNAME
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_1
+pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_3

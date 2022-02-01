@@ -132,6 +132,7 @@ runs/
 data/
 
 input/*
+evaluation/*
 # maybe include input/eval_data/* ?
 # !input/eval_data/
 output/*

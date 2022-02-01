@@ -1,6 +1,5 @@
 # this code originates from https://github.com/github/CodeSearchNet/blob/master/src/relevanceeval.py
 
-
 """
 Usage:
     relevanceeval.py [options] RELEVANCE_ANNOTATIONS_CSV_PATH MODEL_PREDICTIONS_CSV

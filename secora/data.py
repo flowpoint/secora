@@ -9,9 +9,6 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 
 
-
-
-
 def preproc_valid(sample):
     # delete docstring from code samples
     return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
@@ -58,19 +55,23 @@ def tokenize_valid_sample(tokenizer, batch, config):
 
 
 def preprocess_split(split, config, limit_samples=-1, **kwargs):
-    if split not in ["train", "validation"]:
+    if split not in ["train", "validation", "test", "eval"]:
         raise RuntimeError(f"invalid dataset split: {split}")
 
     datasets.set_progress_bar_enabled(kwargs['progress'])
     tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
-    dataset = load_dataset("code_search_net")[split]
+
+    if split == "eval":
+        dataset = load_dataset("code_search_net")['train']
+    else:
+        dataset = load_dataset("code_search_net")[split]
 
     if limit_samples >= 1:
         dataset = dataset.select(range(limit_samples))
 
-    dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=config['preprocess_cores'])
+    dataset = dataset.filter(lambda x: x['language'] in config['languages'] or 'all' in config['languages'], num_proc=config['preprocess_cores'])
 
-    if split == "validation":
+    if split != "train":
         dataset = dataset.map(preproc_valid, batched=False, num_proc=config['preprocess_cores'])
 
     dataset = dataset.rename_column("func_code_url", "url")
@@ -88,12 +89,12 @@ def preprocess_split(split, config, limit_samples=-1, **kwargs):
 
     dataset = dataset.map(
             tokenize_fn,
-            remove_columns=set(dataset.column_names) - {'url'},
+            remove_columns=set(dataset.column_names) - {'url', 'language'},
             batched=True,
             num_proc=config['preprocess_cores'])
 
     # cast dataset to torch tensors
-    dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url'}, output_all_columns=True)
+    dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url','language'}, output_all_columns=True)
 
     return dataset
 
