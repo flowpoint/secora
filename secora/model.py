@@ -18,10 +18,11 @@ class EmbeddingModel(torch.nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.base_model = AutoModelForMaskedLM.from_pretrained(config['model_name'], hidden_dropout_prob=0.1).base_model
+        self.base_model = AutoModelForMaskedLM.from_pretrained(config['model_name'], hidden_dropout_prob=config['dropout']).base_model
 
         # use [cls] pooling like simcse, because of its effectiveness
         self.embsize = config['embedding_size']
+        self.config = config
         self.pooling = torch.nn.Linear(
                 self.base_model.config.hidden_size,
                 self.embsize

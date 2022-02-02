@@ -1,9 +1,11 @@
 import optuna
 from optuna.trial import TrialState
+from optuna.integration.tensorboard import TensorBoardCallback
 
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
 import random
 import argparse
 import os
@@ -18,7 +20,9 @@ from copy import deepcopy
 
 from functools import partial
 
-def callback(epoch, shard, score, config, **kwargs):
+def callback(state_tracker, score, config, **kwargs):
+    epoch = state_tracker['training_progress'].epoch
+    shard = state_tracker['training_progress'].shard
     trial = kwargs['trial']
     trial.report(score, epoch*config['shards'] + shard)
 
@@ -47,20 +51,41 @@ def hyperopt_worker(rank, config, progress, debug, master_port):
         t = trial.number
         config = deepcopy(default_config)
         config['name'] = config['name'] + f"_{t}"
-        config['lr'] = trial.suggest_float('lr', 1e-6, 1e-4, log=True)
+        config['learning_rate'] = trial.suggest_uniform('learning_rate', 1e-6, 1e-4)
+        config['dropout'] = trial.suggest_uniform('dropout', 0.05, 0.3)
+        config['temp'] = trial.suggest_uniform('temp', 0.02, 0.1)
+        accums = [x//config['batch_size'] for x in [32, 64, 128, 256, 512]]
+        config['grad_accum'] = trial.suggest_categorical('grad_accum', accums)
+        optimizers = ['adam', 'adamw', 'sm3', 'sgd']
+        config['optimizer'] = trial.suggest_categorical('optimizer', optimizers)
+
+        hparams = {x:config[x] for x in ['learning_rate', 'dropout', 'temp', 'grad_accum', 'optimizer']}
 
         logdir = os.path.join(config['logdir'], config['name'])
         checkdir = os.path.join(config['checkpoint_dir'], config['name'])
         os.makedirs(logdir, exist_ok=True)
         os.makedirs(checkdir, exist_ok=True)
 
-        return train(config, preempt_callback=callback, trial=trial, progress=progress, debug=debug, logger=logger)
+        score = train(config, preempt_callback=callback, trial=trial, progress=progress, debug=debug, logger=logger)
+
+        if rank == 0:
+            writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+            writer.add_hparams(
+                hparams, 
+                {'mrr/validation':score}, 
+                hparam_domain_discrete={'grad_accum':accums, 'optimizer':optimizers},
+                run_name=config['name'])
+
+        return score
+
+
 
     def obj_(single_trial): return objective(config, progress, debug, logger, rank, single_trial) 
 
     study = None
 
     if rank == 0:
+        logdir = os.path.join(config['logdir'], config['name'])
         logger.info('creating study')
         study = optuna.create_study(direction='maximize')
         logger.info('optimizing study')

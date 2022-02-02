@@ -137,3 +137,10 @@ class TrainingProgress:
         self.epoch = state['epoch']
         self.shard = state['shard']
         self.optimizer_step = state['optimizer_step']
+
+    def shard_done(self):
+        self.shard += 1
+
+    def epoch_done(self):
+        self.shard = 0
+        self.epoch += 1

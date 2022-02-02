@@ -1,49 +1,37 @@
-hostname: localhost
-    
-port: 12355
-
-num_gpus: 'auto'
-
-name: 'hypersearch_test'
-
-batch_size: 8
-infer_batch_size: 8
-
-seed: 44
-epochs: 4
-shards: 10
-
-grad_accum: 64 # counted in batches
-
-warmup_batches: 10000
-temp: 0.05
-
-embedding_size: 128
-top_k:  10
-
 logdir: "./output"
 checkpoint_dir: "./output"
 
+name: 'hypersearch_test'
+seed: 42
+hostname: localhost
+port: 12355
 max_checkpoints: 20
 
+num_gpus: 'auto'
+precision: mixed
 cuda_graphs: False
-
-model_name: 'microsoft/codebert-base'
-learning_rate: 1e-5
-
-finetune_mode: all
-
-languages:
-  - python
-
 
 preprocess_cores: 10
 preprocess_mode: concat
-
 max_input_tokens: 256
+languages:
+  - python
 
+epochs: 4
+shards: 10
+warmup_batches: 10000
+
+finetune_mode: all
+
+model_name: 'microsoft/codebert-base'
 optimizer: adam
-
-precision: mixed
-
 lr_schedule: constant
+
+learning_rate: 1e-5
+batch_size: 8
+grad_accum: 64 # counted in batches
+temp: 0.05
+dropout: 0.1
+
+embedding_size: 128
+top_k:  10

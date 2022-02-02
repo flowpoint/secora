@@ -35,7 +35,7 @@ import transformers
 
 from model import *
 from data import *
-from config import load_config, overwrite_config, save_config
+from config import *
 from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
 from tracking import *
@@ -57,7 +57,7 @@ def train_shard(
 
     logger = kwargs['logger']
 
-    optim = state_tracker['optim']
+    optim = state_tracker['optimizer']
     scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
     scaler = state_tracker['scaler']
@@ -121,7 +121,7 @@ def train_shard(
             scheduler.step()
             training_progress.optimizer_step += 1
             if rank == 0:
-                writer.add_scalar("lr/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
+                writer.add_scalar("learning_rate/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
                 writer.flush()
 
             optim.zero_grad(set_to_none=True)
@@ -136,6 +136,8 @@ def train_shard(
 
 
 def train(config, preempt_callback=None, **kwargs):
+    check_config(config)
+
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
@@ -184,14 +186,14 @@ def train(config, preempt_callback=None, **kwargs):
     else:
         raise RuntimeError('finetune_mode has to be: all or pooling')
 
-    if config['optim'] == 'adam':
-        optim = torch.optim.Adam(params, lr=config['lr'])
-    elif config['optim'] == 'adamw':
-        optim = torch.optim.AdamW(params, lr=config['lr'])
-    elif config['optim'] == 'sgd':
-        optim = torch.optim.SGD(params, lr=config['lr'])
-    elif config['optim'] == 'sm3':
-        optim = SM3(params, lr=config['lr'])
+    if config['optimizer'] == 'adam':
+        optim = torch.optim.Adam(params, lr=config['learning_rate'])
+    elif config['optimizer'] == 'adamw':
+        optim = torch.optim.AdamW(params, lr=config['learning_rate'])
+    elif config['optimizer'] == 'sgd':
+        optim = torch.optim.SGD(params, lr=config['learning_rate'])
+    elif config['optimizer'] == 'sm3':
+        optim = SM3(params, lr=config['learning_rate'])
     else:
         raise RuntimeError('config specifies an unsupported optimizer')
 
@@ -219,7 +221,7 @@ def train(config, preempt_callback=None, **kwargs):
             config,
             logger,
             model=model,
-            optim=optim,
+            optimizer=optim,
             scheduler=scheduler,
             scaler=scaler,
             training_progress=training_progress)
@@ -255,7 +257,6 @@ def train(config, preempt_callback=None, **kwargs):
         while(training_progress.shard < num_shards):
             logger.info(f'training shard: {training_progress.shard}')
 
-            logger.debug(f'geting shard - {training_progress.shard}')
             shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
             train_loader = get_loader(shard, config)
 
@@ -267,14 +268,8 @@ def train(config, preempt_callback=None, **kwargs):
                 **kwargs
                 )
 
-            training_progress.shard += 1
 
-            torch.cuda.synchronize()
-            dist.barrier()
-            if rank == 0:
-                state_tracker.save()
-
-            logger.info(f'validating shard {training_progress.shard-1}')
+            logger.info(f'validating shard {training_progress.shard}')
 
             score = validate(state_tracker['model'], 
                     valid_loader, 
@@ -283,11 +278,17 @@ def train(config, preempt_callback=None, **kwargs):
                     state_tracker['training_progress'],
                     **kwargs)
 
-            if preempt_callback is not None:
-                preempt_callback(training_progress.epoch, training_progress.shard, score, config, **kwargs)
+            training_progress.shard_done()
 
-        training_progress.epoch += 1
-        training_progress.shard = 0
+            torch.cuda.synchronize()
+            dist.barrier()
+            if rank == 0:
+                state_tracker.save()
+
+            if preempt_callback is not None:
+                preempt_callback(state_tracker, score, config, **kwargs)
+
+        training_progress.epoch_done()
 
     return score
 
