@@ -44,7 +44,7 @@ RUN pip install faiss-cpu
 
 #COPY ./config /root/.ssh/config
 
-RUN pip install tensorboard datasets ipython transformers ray[tune] docopt torch-SM3
+RUN pip install tensorboard datasets ipython transformers docopt torch-SM3 optuna
 RUN pip install pipenv
 
 #COPY . /usr/src/buildbot-worker

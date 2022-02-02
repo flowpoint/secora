@@ -101,7 +101,6 @@ def train_shard(
             with model.no_sync():
                 loss.backward()
         else:
-            logger.debug('optimization step')
             loss.backward()
 
             #gradient clipping
@@ -136,7 +135,7 @@ def train_shard(
         writer.flush()
 
 
-def train(config, **kwargs):
+def train(config, preempt_callback=None, **kwargs):
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
@@ -146,7 +145,7 @@ def train(config, **kwargs):
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        limit = 5*config['grad_accum']*config['batch_size']
+        limit = 10*config['grad_accum']*config['batch_size']
         train_set = preprocess_split('train', config, limit_samples=limit, **kwargs)
         valid_set = preprocess_split('validation', config, limit_samples=limit, **kwargs)
     else:
@@ -256,6 +255,7 @@ def train(config, **kwargs):
         while(training_progress.shard < num_shards):
             logger.info(f'training shard: {training_progress.shard}')
 
+            logger.debug(f'geting shard - {training_progress.shard}')
             shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
             train_loader = get_loader(shard, config)
 
@@ -274,21 +274,22 @@ def train(config, **kwargs):
             if rank == 0:
                 state_tracker.save()
 
-            logger.info(f'validating shard {training_progress.shard}')
+            logger.info(f'validating shard {training_progress.shard-1}')
 
-            validate(state_tracker['model'], 
+            score = validate(state_tracker['model'], 
                     valid_loader, 
                     config, 
                     writer, 
                     state_tracker['training_progress'],
                     **kwargs)
 
+            if preempt_callback is not None:
+                preempt_callback(training_progress.epoch, training_progress.shard, score, config, **kwargs)
+
         training_progress.epoch += 1
         training_progress.shard = 0
 
-    torch.cuda.synchronize()
-    dist.barrier(group=dist.group.WORLD)
-    dist.destroy_process_group()
+    return score
 
 
 def training_worker(rank, config, progress, debug, master_port):
@@ -312,6 +313,11 @@ def training_worker(rank, config, progress, debug, master_port):
     logger = make_logger(config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
     train(config, progress=progress, debug=debug, logger=logger)
+
+    torch.cuda.synchronize()
+    dist.barrier(group=dist.group.WORLD)
+    dist.destroy_process_group()
+
 
 
 if __name__ == "__main__":

@@ -134,11 +134,22 @@ def validate(
                         
 
     rank = dist.get_rank()
+    dist.barrier()
     if rank == 0:
         neighbors_list = [list(n) for n in neighbors]
         score = mrr(list(relevant_ids), neighbors_list)
+    else:
+        score = 0.
 
+    tens = torch.tensor(score, requires_grad=False, device=rank)
+    dist.broadcast(tens, src=0)
+    s = tens.detach().to('cpu').numpy()
+    dist.barrier()
+
+    if rank == 0:
         i = training_progress.optimizer_step
         writer.add_scalar("mrr/validation", score, i)
         writer.add_scalar("distances/validation", np.mean(distances), i)
         writer.flush()
+
+    return s

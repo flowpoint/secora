@@ -4,7 +4,7 @@ port: 12355
 
 num_gpus: 'auto'
 
-name: 'local_4ep_full_constant_adam_2'
+name: 'hypersearch_test'
 
 batch_size: 8
 infer_batch_size: 8
