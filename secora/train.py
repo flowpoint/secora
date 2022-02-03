@@ -285,10 +285,13 @@ def train(config, preempt_callback=None, **kwargs):
             if rank == 0:
                 state_tracker.save()
 
-            if preempt_callback is not None:
-                preempt_callback(state_tracker, score, config, **kwargs)
+            if 'preempt_callback' in kwargs:
+                kwargs['preempt_callback'](state_tracker, score, config, **kwargs)
 
         training_progress.epoch_done()
+
+    if 'hparam_callback' in kwargs:
+        kwargs['hparam_callback'](writer, score)
 
     return score
 

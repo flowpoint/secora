@@ -11,20 +11,51 @@ from transformers import AutoTokenizer
 
 def preproc_valid(sample):
     # delete docstring from code samples
-    return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
+    #return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
+    return {'func_code_string': " ".join(sample['func_code_tokens'])}
+
+
+def fair_truncate(doc, code, max_length):
+    ''' truncates two strings fairly '''
+    dlen = len(doc)
+    clen = len(code)
+    if dlen < max_length//2 and clen < max_length//2:
+        d = doc
+        c = code
+    elif not dlen < max_length//2 and not clen < max_length//2:
+        d = doc[:max_length//2]
+        c = code[:max_length//2]
+    elif not clen < max_length//2:
+        d = doc
+        c = code[:max_length-dlen]
+    else:
+        d = doc[:max_length-clen]
+        c = code
+
+    return d, c
 
 
 def tokenize_train_sample(tokenizer, batch, config):
+    ''' this is run in batch mode, so the features are batched '''
+    max_length = config['max_input_tokens']
+
     mode = config['preprocess_mode']
     if mode == 'joint':
         whole = batch['whole_func_string']
     elif mode == 'concat':
-        # <CODESPLIT> is also used by codebert
-        whole = [a+b+c for a,b,c in zip(batch['func_documentation_string'], cycle(['<CODESPLIT>']),  batch['func_code_string'])]
+        whole = []
+        for doc, code in zip(batch['func_documentation_tokens'],batch['func_code_tokens']):
+            d, c = fair_truncate(
+                " ".join(doc),
+                " ".join(code),
+                max_length
+                )
+            whole.append(d + tokenizer.sep_token + c)
+
     else:
         raise RuntimeError(f"preprocess mode: {mode} is not supported")
 
-    tokenized_code = tokenizer(whole, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
+    tokenized_code = tokenizer(whole, padding='max_length', max_length=max_length, truncation=True, return_token_type_ids=True)
 
     proc_batch = dict()
 
@@ -36,7 +67,7 @@ def tokenize_train_sample(tokenizer, batch, config):
 
 def tokenize_valid_sample(tokenizer, batch, config):
     code = batch['func_code_string']
-    doc = batch['func_documentation_string']
+    doc = [x + tokenizer.sep_token for x in batch['func_documentation_string']]
 
     # call tokenizer twice instead of on a pair, so that its impossible to leak data between code and doc
     # instead of the joint tokenization

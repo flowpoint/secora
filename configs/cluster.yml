@@ -1,11 +1,14 @@
-logdir: "../cluster_output"
-checkpoint_dir: "../cluster_output"
+#logdir: "../cluster_output"
+#checkpoint_dir: "../cluster_output"
+
+logdir: "/scratch/fhoels2s/cluster_output"
+checkpoint_dir: "/scratch/fhoels2s/cluster_output"
 
 name: 'cluster_run_name'
 seed: 42
 hostname: localhost
 port: 42855
-max_checkpoints: 10
+max_checkpoints: 5
 
 num_gpus: 'auto'
 precision: mixed
@@ -17,7 +20,7 @@ max_input_tokens: 256
 languages:
   - python
 
-epochs: 1
+epochs: 4
 shards: 10
 warmup_batches: 10000
 

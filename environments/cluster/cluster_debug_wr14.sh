@@ -29,4 +29,5 @@ export NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_3
+#pipenv run python secora/train.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_3
+pipenv run python secora/hyperparam_search.py --debug configs/cluster.yml --batch_size 8 --run_name debug_cluster_wr14_hypersearch_1

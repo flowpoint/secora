@@ -2,11 +2,11 @@
 
 #SBATCH --partition=gpu4         # partition (queue)
 #SBATCH --nodes=1                # number of nodes
-#SBATCH --ntasks-per-node=24     # number of tasks per node
+#SBATCH --ntasks-per-node=32     # number of tasks per node
 #SBATCH --mem=96G                # memory per node in MB (different units with suffix K|M|G|T)
 #SBATCH --time=40:00:00              # total runtime of job allocation (format D-HH:MM:SS; first parts optional)
-#SBATCH --output=slurm_logs/slurm_profile.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
-#SBATCH --error=slurm_logs/slurm_profile.%j.err     # filename for STDERR
+#SBATCH --output=slurm_logs/slurm_run_gpu4.%j.out    # filename for STDOUT (%N: nodename, %j: job-ID)
+#SBATCH --error=slurm_logs/slurm_run_gpu4.%j.err     # filename for STDERR
 
 cd ~/secora
 # setup
@@ -27,3 +27,4 @@ unset NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
+pipenv run python secora/hyperparam_search.py --debug configs/cluster.yml --batch_size 8 --run_name run_cluster_wr14_hypersearch_1

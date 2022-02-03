@@ -30,17 +30,17 @@ def callback(state_tracker, score, config, **kwargs):
         raise optuna.exceptions.TrialPruned()
 
 
-def hyperopt_worker(rank, config, progress, debug, master_port):
-    n_trials = 3
+def hyperopt_worker(rank, default_config, progress, debug, master_port):
+    n_trials = 32
 
-    world_size = config['num_gpus']
-    host_name = config['hostname']
+    world_size = default_config['num_gpus']
+    host_name = default_config['hostname']
 
     os.environ['MASTER_ADDR'] = host_name
     os.environ['MASTER_PORT'] = master_port
 
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(65))
-    logger = make_logger(config, debug=debug, rank=rank)
+    logger = make_logger(default_config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
 
     def objective(default_config, progress, debug, logger, rank, single_trial):
@@ -50,7 +50,8 @@ def hyperopt_worker(rank, config, progress, debug, master_port):
         #overwrite config values with search hyperparameters
         t = trial.number
         config = deepcopy(default_config)
-        config['name'] = config['name'] + f"_{t}"
+        config['name'] = default_config['name'] + f"_{t}"
+
         config['learning_rate'] = trial.suggest_uniform('learning_rate', 1e-6, 1e-4)
         config['dropout'] = trial.suggest_uniform('dropout', 0.05, 0.3)
         config['temp'] = trial.suggest_uniform('temp', 0.02, 0.1)
@@ -59,35 +60,40 @@ def hyperopt_worker(rank, config, progress, debug, master_port):
         optimizers = ['adam', 'adamw', 'sm3', 'sgd']
         config['optimizer'] = trial.suggest_categorical('optimizer', optimizers)
 
+        if rank == 0:
+            logdir = os.path.join(config['logdir'], config['name'])
+            checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+            os.makedirs(logdir, exist_ok=True)
+            os.makedirs(checkdir, exist_ok=True)
+        dist.barrier()
+
         hparams = {x:config[x] for x in ['learning_rate', 'dropout', 'temp', 'grad_accum', 'optimizer']}
 
-        logdir = os.path.join(config['logdir'], config['name'])
-        checkdir = os.path.join(config['checkpoint_dir'], config['name'])
-        os.makedirs(logdir, exist_ok=True)
-        os.makedirs(checkdir, exist_ok=True)
+        def hparam_callback(writer, score):
+            if rank == 0:
+                writer.add_hparams(
+                    hparams, 
+                    {'mrr/validation':score}, 
+                    hparam_domain_discrete={'grad_accum':accums, 'optimizer':optimizers},
+                    run_name=config['name'])
+                writer.flush()
 
-        score = train(config, preempt_callback=callback, trial=trial, progress=progress, debug=debug, logger=logger)
-
-        if rank == 0:
-            writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-            writer.add_hparams(
-                hparams, 
-                {'mrr/validation':score}, 
-                hparam_domain_discrete={'grad_accum':accums, 'optimizer':optimizers},
-                run_name=config['name'])
-
+        score = train(config, preempt_callback=callback, hparam_callback=hparam_callback, trial=trial, progress=progress, debug=debug, logger=logger)
         return score
 
 
-
-    def obj_(single_trial): return objective(config, progress, debug, logger, rank, single_trial) 
+    def obj_(single_trial): return objective(default_config, progress, debug, logger, rank, single_trial) 
 
     study = None
 
     if rank == 0:
-        logdir = os.path.join(config['logdir'], config['name'])
+        logdir = os.path.join(default_config['logdir'], default_config['name'])
         logger.info('creating study')
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction='maximize',
+                pruner=optuna.pruners.HyperbandPruner(
+                    min_resource=1, max_resource=2, reduction_factor=3
+                    ),
+                )
         logger.info('optimizing study')
         study.optimize(obj_, gc_after_trial=True, n_trials=n_trials)
     else:
