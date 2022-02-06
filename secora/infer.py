@@ -137,16 +137,30 @@ def validate(
     dist.barrier()
     if rank == 0:
         neighbors_list = [list(n) for n in neighbors]
-        score = mrr(list(relevant_ids), neighbors_list)
+        score = float(mrr(list(relevant_ids), neighbors_list))
     else:
-        score = 0.
+        score = float(0.)
 
-    tens = torch.tensor(score, requires_grad=False, device=rank)
+    dist.barrier()
+
+    tens = torch.tensor(score, requires_grad=False, device=rank, dtype=torch.float32)
     dist.broadcast(tens, src=0)
+    torch.cuda.synchronize()
+    dist.barrier()
     s = tens.detach().to('cpu').numpy()
     dist.barrier()
 
     if rank == 0:
+        '''
+        # show embeddings in tensorboard
+        samples = []
+        for b in valid_loader:
+            samples += b
+
+        for s, c, d in zip(samples, code_embedding, doc_embedding):
+        '''
+
+
         i = training_progress.optimizer_step
         writer.add_scalar("mrr/validation", score, i)
         writer.add_scalar("distances/validation", np.mean(distances), i)

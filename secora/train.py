@@ -143,6 +143,10 @@ def train(config, preempt_callback=None, **kwargs):
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
         save_config(config, path)
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+
+    else:
+        writer = None
+
     logger = kwargs['logger']
     logger.info('started train function')
 
@@ -290,7 +294,7 @@ def train(config, preempt_callback=None, **kwargs):
 
         training_progress.epoch_done()
 
-    if 'hparam_callback' in kwargs:
+    if 'hparam_callback' in kwargs and rank == 0:
         kwargs['hparam_callback'](writer, score)
 
     return score

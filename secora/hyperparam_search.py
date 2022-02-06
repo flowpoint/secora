@@ -1,5 +1,6 @@
 import optuna
 from optuna.trial import TrialState
+from optuna.samplers import RandomSampler
 from optuna.integration.tensorboard import TensorBoardCallback
 
 import torch
@@ -20,6 +21,7 @@ from copy import deepcopy
 
 from functools import partial
 
+
 def callback(state_tracker, score, config, **kwargs):
     epoch = state_tracker['training_progress'].epoch
     shard = state_tracker['training_progress'].shard
@@ -31,7 +33,7 @@ def callback(state_tracker, score, config, **kwargs):
 
 
 def hyperopt_worker(rank, default_config, progress, debug, master_port):
-    n_trials = 32
+    n_trials = 8
 
     world_size = default_config['num_gpus']
     host_name = default_config['hostname']
@@ -89,9 +91,21 @@ def hyperopt_worker(rank, default_config, progress, debug, master_port):
     if rank == 0:
         logdir = os.path.join(default_config['logdir'], default_config['name'])
         logger.info('creating study')
+
+        sql_url = default_config['sql_url']
+
+        study_name = default_config['name']
+        storage_name = f"{sql_url}/{study_name}"
+
         study = optuna.create_study(direction='maximize',
+                study_name=study_name,
+                storage=storage_name,
+                load_if_exists=True,
+                sampler= RandomSampler(seed=default_config['seed']),
+                # note, if warmup steps are more than steps in a shard, min_resource can mean that 
+                # trials are incorrectly discarded, as they only warmed up and didn't train
                 pruner=optuna.pruners.HyperbandPruner(
-                    min_resource=1, max_resource=2, reduction_factor=3
+                    min_resource=1, max_resource=default_config['epochs']*default_config['shards'], reduction_factor=3
                     ),
                 )
         logger.info('optimizing study')
@@ -127,6 +141,7 @@ def hyperopt_worker(rank, default_config, progress, debug, master_port):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='hyperparam search')
     parser.add_argument('config_path', type=str)
+    parser.add_argument('sql_url', type=str)
     parser.add_argument('--run_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
@@ -138,6 +153,8 @@ if __name__ == "__main__":
 
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
+
+    config['sql_url'] = args.sql_url
 
     np.random.seed(config['seed'])
     torch.cuda.manual_seed_all(config['seed'])

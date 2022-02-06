@@ -7,6 +7,7 @@ import logging
 import torch
 import torch.distributed as dist
 
+
 def make_logger(config, debug=False, rank=-1):
     if debug == True:
         level = logging.DEBUG
