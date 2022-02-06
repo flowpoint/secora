@@ -1,6 +1,6 @@
 import logging
 from time import time 
-
+import json
 
 import faiss
 import numpy as np
@@ -151,17 +151,16 @@ def validate(
     dist.barrier()
 
     if rank == 0:
-        '''
         # show embeddings in tensorboard
         samples = []
         for b in valid_loader:
-            samples += b
-
-        for s, c, d in zip(samples, code_embedding, doc_embedding):
-        '''
-
+            for u,l in zip(b['url'], b['language']):
+                samples.append(json.dumps({'url':u, 'lang':l}))
 
         i = training_progress.optimizer_step
+        writer.add_embedding(code_embedding, metadata=samples, tag='code', global_step=i)
+        writer.add_embedding(doc_embedding, metadata=samples, tag='doc', global_step=i)
+
         writer.add_scalar("mrr/validation", score, i)
         writer.add_scalar("distances/validation", np.mean(distances), i)
         writer.flush()
