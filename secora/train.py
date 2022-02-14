@@ -1,14 +1,8 @@
 import os
-import sys
-import random
-
-import tempfile
-
 import time
 from time import time
 
 from math import ceil
-from dataclasses import dataclass
 import argparse
 import datetime
 
@@ -18,8 +12,6 @@ import numpy as np
 from tqdm import tqdm
 
 import torch
-import torch.nn.functional as F
-
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -31,7 +23,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-import transformers
+from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
 
 from model import *
 from data import *
@@ -42,8 +34,7 @@ from tracking import *
 
 from SM3 import SM3
 
-import logging
-
+TIMEOUT = datetime.timedelta(65)
 
 def train_shard(
         state_tracker,
@@ -309,15 +300,7 @@ def training_worker(rank, config, progress, debug, master_port):
     os.environ['MASTER_PORT'] = master_port
 
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-    #os.environ.pop('MASTER_ADDR', None)
-    #os.environ.pop('PORT', None)
-    #os.environ.pop('NCCL_ASYNC_ERROR_HANDLING', None) 
-
-    # this needs a filesystem that has fnctl
-    #tmpdir = tempfile.TemporaryDirectory(prefix='/home/fhoels2s/tmp/') 
-    # initialize the process group
-    #dist.init_process_group('nccl', rank=rank, world_size=world_size, init_method='file://' + os.path.join(tmpdir.name, 'torch_sharedfile'), timeout=datetime.timedelta(65))
-    dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(65))
+    dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
     logger = make_logger(config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
     train(config, progress=progress, debug=debug, logger=logger)
@@ -336,7 +319,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
-    parser.add_argument('--port', type=int, default=random.randint(10000, 15000))
+    parser.add_argument('--port', type=int, default=np.random.randint(10000, 15000))
 
     args = parser.parse_args()
     master_port = str(args.port)

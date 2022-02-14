@@ -58,7 +58,7 @@ class TestConfig(unittest.TestCase):
         #self.assertEqual(1,1)
 
     def test_config_class(self):
-        a = Config()
+        a = SimpleConfig()
         a.add(IntSetting('hello'))
         a['hello'] = 1
         print(a['hello'])

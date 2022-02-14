@@ -92,24 +92,52 @@ def hyperopt_worker(rank, default_config, progress, debug, master_port):
         logdir = os.path.join(default_config['logdir'], default_config['name'])
         logger.info('creating study')
 
-        sql_url = default_config['sql_url']
-
+        # saving and restoring with either memory or sql backend
         study_name = default_config['name']
-        storage_name = f"{sql_url}/{study_name}"
 
-        study = optuna.create_study(direction='maximize',
-                study_name=study_name,
-                storage=storage_name,
-                load_if_exists=True,
-                sampler= RandomSampler(seed=default_config['seed']),
-                # note, if warmup steps are more than steps in a shard, min_resource can mean that 
-                # trials are incorrectly discarded, as they only warmed up and didn't train
-                pruner=optuna.pruners.HyperbandPruner(
-                    min_resource=1, max_resource=default_config['epochs']*default_config['shards'], reduction_factor=3
-                    ),
-                )
+        if default_config['sql_url'] is not None:
+            sql_url = default_config['sql_url']
+
+            storage_name = f"{sql_url}/{study_name}"
+            def trial_finished_callback(study, frozen_trial):
+                pass
+
+        else:
+            storage_name = None
+            study_path = os.path.join(logdir, 'study.pickle')
+            def trial_finished_callback(study, frozen_trial):
+                tnum = frozen_trial.number
+                with open(study_path, 'wb') as f:
+                    # Pickle the 'data' dictionary using the highest protocol available.
+                    pickle.dump(study, f, pickle.HIGHEST_PROTOCOL)
+
+            if os.path.isfile(study_path):
+                with open(study_path, 'rb') as f:
+                    # The protocol version used is detected automatically, so we do not
+                    # have to specify it.
+                    study = pickle.load(f)
+
+        if study is None:
+            study = optuna.create_study(direction='maximize',
+                    study_name=study_name,
+                    storage=storage_name,
+                    load_if_exists=True,
+                    sampler= RandomSampler(seed=default_config['seed']),
+                    # note, if warmup steps are more than steps in a shard, min_resource can mean that 
+                    # trials are incorrectly discarded, as they only warmed up and didn't train
+                    pruner=optuna.pruners.HyperbandPruner(
+                        min_resource=1,
+                        max_resource=default_config['epochs']*default_config['shards'], 
+                        reduction_factor=3
+                        ),
+                    )
+
         logger.info('optimizing study')
-        study.optimize(obj_, gc_after_trial=True, n_trials=n_trials)
+        study.optimize(
+                obj_, 
+                gc_after_trial=True, 
+                n_trials=n_trials, 
+                callbacks=[save_callback])
     else:
         for t in range(n_trials):
             try:
@@ -141,7 +169,7 @@ def hyperopt_worker(rank, default_config, progress, debug, master_port):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='hyperparam search')
     parser.add_argument('config_path', type=str)
-    parser.add_argument('sql_url', type=str)
+    parser.add_argument('--sql_url', type=str, default=None)
     parser.add_argument('--run_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
