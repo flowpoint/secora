@@ -1,10 +1,7 @@
-import unittest
+import pytest
 import os
-import sys
 from secora.tracking import StateTracker
 import tempfile
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 class MockModel:
     def __init__(self):
@@ -24,9 +21,8 @@ class MockLogger:
     def exception(self,*args, **kwargs):
         pass
 
-class TestTracker(unittest.TestCase):
-    def setUp(self):
-        self.logger = MockLogger()
+class TestTracker:
+    logger = MockLogger()
 
     def test_checkpoint_count(self):
         model = MockModel()
@@ -36,18 +32,21 @@ class TestTracker(unittest.TestCase):
                     "max_checkpoints": i,
                     'checkpoint_dir': tmpdirname,
                     'name': 'model'
-                        }
+                    }
 
                 tracker = StateTracker(config, model=model, logger=self.logger)
 
                 path = os.path.join(tmpdirname, 'model')
-                self.assertTrue(os.listdir(path) == [])
 
-                for k in range(i+10):
+                for k in range(0, i):
                     files = os.listdir(path)
-                    self.assertCountEqual(files, tracker._list_checkpoints())
+                    assert files == tracker._list_checkpoints()
                     tracker.save()
-                    self.assertLessEqual(len(files), k)
+
+                for k2 in range(0,10):
+                    files = os.listdir(path)
+                    tracker.save()
+                    assert len(files) <= i
 
     def test_restore(self):
         model = MockModel()
@@ -61,7 +60,7 @@ class TestTracker(unittest.TestCase):
             tracker = StateTracker(config, model=model, logger=self.logger)
             
             path = os.path.join(tmpdirname, 'model')
-            self.assertTrue(os.listdir(path) == [])
+            assert os.listdir(path) == []
 
             model.state['key1'] = "value2"
             tracker.save()
@@ -69,7 +68,7 @@ class TestTracker(unittest.TestCase):
             model2 = MockModel()
             tracker2 = StateTracker(config, model=model2, logger=self.logger)
             tracker2.load_latest()
-            self.assertEqual(model2.state, model.state)
-            self.assertEqual(tracker['model'].state, model.state)
+            assert model2.state == model.state
+            assert tracker['model'].state == model.state
     
 

@@ -317,7 +317,9 @@ class DirectoryOption(Option):
         return str
 
     def check(self, val):
-        return super().check(val)
+        if not os.path.isdir(val):
+            raise ValueError('value has to be an existing directory')
+        return True
 
 
 class Config(ABC):

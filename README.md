@@ -22,6 +22,11 @@ torch and faiss should be manually installed
 ipython secora/train.py
 ```
 
+## run tests:
+```
+pytest tests
+```
+
 # Goals
 we want to apply and evaluate bert on code for information retrieval.
 

@@ -1,10 +1,6 @@
-import unittest
-import os
-import sys
+import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-class TestExample(unittest.TestCase):
+class TestExample:
     def test_example(self):
-        self.assertEqual(1,1)
+        assert 1 == 1
 
