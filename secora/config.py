@@ -106,7 +106,6 @@ class ConfigTypeError(Exception):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 ##
-##
 
 def decorator(func):
     @wraps(func)
@@ -263,6 +262,7 @@ class FloatOption(Option):
             return False
         return True
 
+
 class EnumSetting(Setting):
     def __init__(self, name, enum, *args, **kwargs):
         self.enum = enum
@@ -291,6 +291,7 @@ class EnumOption(Option):
     def check(self, val):
         return True
 
+
 class DirectorySetting(Setting):
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
@@ -304,9 +305,6 @@ class DirectorySetting(Setting):
             raise ValueError('value has to be an existing directory')
         return True
 
-    def __repr__(self):
-        return f"FloatSetting('{self._name}')"
-
 
 class DirectoryOption(Option):
     def __init__(self, name, default, lb=None, ub=None, *args, **kwargs):
@@ -319,6 +317,34 @@ class DirectoryOption(Option):
     def check(self, val):
         if not os.path.isdir(val):
             raise ValueError('value has to be an existing directory')
+        return True
+
+
+class FileSetting(Setting):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    @property
+    def allowed_type(self):
+        return str
+
+    def check(self, val):
+        if not os.path.isfile(val):
+            raise ValueError('value has to be an existing file')
+        return True
+
+
+class FileOption(Option):
+    def __init__(self, name, default, lb=None, ub=None, *args, **kwargs):
+        super().__init__(name, default, *args, **kwargs)
+
+    @property
+    def allowed_type(self):
+        return str
+
+    def check(self, val):
+        if not os.path.isdir(val):
+            raise ValueError('value has to be an existing file')
         return True
 
 
@@ -358,6 +384,22 @@ class SimpleConfig:
     def check(self) -> bool:
         for k, v in self._settings:
             v.check(v.value)
+
+    def compose(self, config2):
+        nconf = SimpleConfig()
+        for k,v in self._settings.items():
+            if k in config2._settings:
+                raise RuntimeError("can't compose configs, where a setting is overwritten")
+
+            nconf.add(v)
+        for k,v in config2._settings.items():
+            if k in self._settings:
+                raise RuntimeError("can't compose configs, where a setting is overwritten")
+
+            nconf.add(v)
+
+        return nconf
+
 
 
 if __name__ == "__main__":

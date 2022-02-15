@@ -74,4 +74,26 @@ class TestConfig:
 
         assert a['hello'] == 1
 
+    def test_simpleconfig_compose(self):
+        a = SimpleConfig()
+        a.add(IntSetting('hello'))
+
+        b = SimpleConfig()
+        b.add(IntSetting('hello'))
+
+        c = SimpleConfig()
+        c.add(IntSetting('hello2'))
+
+        with pytest.raises(Exception):
+            a.compose(b)
+        with pytest.raises(Exception):
+            b.compose(a)
+
+        ac = a.compose(c)
+        print(ac._settings)
+        assert 'hello' in ac._settings
+        assert 'hello2' in ac._settings
+        ca = c.compose(a)
+        assert 'hello' in ca._settings
+        assert 'hello2' in ca._settings
 
