@@ -6,8 +6,20 @@ from transformers import PreTrainedModel
 from tokenizers import Tokenizer
 
 from torch.cuda.amp import autocast
+from enum import Enum, auto
+from config import *
 
+from collections import OrderedDict
+'''
+dropout = FloatSetting('dropout', lb=0., ub=1.)
+basemodel = EnumSetting('model_name', BaseModel)
+embedding_size = IntSetting('embedding_size', 1, 1024)
+'''
 
+class BaseModel(Enum):
+    CODEBERT = 'microsoft/codebert-base'
+
+#hidden_dropout_prob=config['dropout']
 class EmbeddingModel(torch.nn.Module):
     ''' example:
         model_name = 'bert-base-cased'
@@ -16,34 +28,65 @@ class EmbeddingModel(torch.nn.Module):
         model = EmbeddingModel(model_name)
         '''
 
-    def __init__(self, config):
+    def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
         super().__init__()
-        self.base_model = AutoModelForMaskedLM.from_pretrained(config['model_name'], hidden_dropout_prob=config['dropout']).base_model
+        self.base_model = AutoModelForMaskedLM.from_pretrained(
+                basemodel.value, **kwargs).base_model
 
         # use [cls] pooling like simcse, because of its effectiveness
-        self.embsize = config['embedding_size']
-        self.config = config
+        self.embsize = embsize
         self.pooling = torch.nn.Linear(
                 self.base_model.config.hidden_size,
                 self.embsize
                 )
         self.activation = torch.nn.Tanh()
 
+    @property
+    def embedding_size(self):
+        return self.embsize
+
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
-        x = self.base_model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, *args, **kwargs).last_hidden_state
+        x = self.base_model(
+                input_ids=input_ids, 
+                token_type_ids=token_type_ids, 
+                attention_mask=attention_mask, 
+                *args, 
+                **kwargs).last_hidden_state
         x = x[:, 0, :]
-        x = self.pooling(x)
-        x = self.activation(x)
+        #x = self.pooling(x)
+        #x = self.activation(x)
         return x
 
-
 class BiEmbeddingModel(torch.nn.Module):
-    def __init__(self, config, dummy_inputs=None):
+    def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
         super().__init__()
-        self.precision = config['precision']
-        self.is_graphed = False
+        self.m = EmbeddingModel(basemodel, embsize, **kwargs)
+        self.embedding_size = self.m.embedding_size
 
-        self.m = EmbeddingModel(config)
+    def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
+        x1 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
+        if self.training == True:
+            x2 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
+            
+            x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
+            return x
+
+        else:
+            return torch.unsqueeze(x1, dim=1)
+
+
+class Precision(Enum):
+    FP32 = torch.float32
+    FP16 = torch.float16
+    BF16 = torch.bfloat16
+    MIXED = auto()
+    KEEP = auto()
+
+class BiEmbeddingModelCuda(BiEmbeddingModel):
+    def __init__(self, basemodel: BaseModel, embsize: int, prec: Precision, **kwargs):
+        super().__init__(basemodel, embsize, **kwargs)
+        self.precision = prec#config['precision']
+        self.is_graphed = False
 
     def make_graphed(self, dummy_inputs):
         if self.is_graphed == True:
@@ -57,14 +100,18 @@ class BiEmbeddingModel(torch.nn.Module):
         torch.cuda.synchronize()
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
-        with autocast(enabled=self.precision == 'mixed'):
-            x1 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
-            if self.training == True:
-                x2 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
-                
-                x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
-                return x
+        with autocast(enabled=(self.precision != Precision.KEEP), dtype=self.precision.value):
+            return super().forward(input_ids, token_type_ids, attention_mask, *args, **kwargs)
 
-            else:
-                return torch.unsqueeze(x1, dim=1)
 
+def get_model(checkpoint_path, config, device):
+    st = torch.load(checkpoint_path, map_location=device)[0]
+    model = BiEmbeddingModel(config).to(device)
+    st2 = OrderedDict()
+    for k in st.keys():
+        v = st[k]
+        #st2[k.removeprefix('module.')] = v
+        st2[k.replace('module.', '', 1)] = v
+        
+    model.load_state_dict(st2)
+    return model

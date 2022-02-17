@@ -19,6 +19,7 @@ def make_logger(config, debug=False, rank=-1):
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
@@ -45,9 +46,9 @@ class StateTracker:
     def __init__(self, config, logger, **kwargs):
         self.config = config
 
-        if 'checkpoint_dir' not in config.keys():
+        if 'checkpoint_dir' not in config.settings.keys():
             raise RuntimeError('config needs to have a checkpoint_dir')
-        if 'max_checkpoints' not in config.keys():
+        if 'max_checkpoints' not in config.settings.keys():
             raise RuntimeError('config needs to have a max_checkpoints')
         if not config['max_checkpoints'] >= 0:
             raise RuntimeError('max_checkpoints has to be positive')

@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
     model = get_model(checkpoint_path, config, device)
 
-    test_set = preprocess_split('eval', config, progress=True)
+    test_set = preprocess_split(data.DataSplit.EVAL, config, progress=True)
 
     p1 = os.path.join(outdir, 'code_embedding.npz')
     if not os.path.isfile(p1):
@@ -140,15 +140,18 @@ if __name__ == '__main__':
 
     with open(p1, 'rb') as f:
         #code_embedding = np.load(p1, allow_pickle=True)
-        code_embedding = np.load(p1,)
+        code_embedding = np.load(p1,).astype(np.float32)
 
     query_set = Dataset.from_csv(args.queries_csv, keep_in_memory=True)
-    q_emb = get_q_emb(model, query_set, config, device)
+    q_emb = get_q_emb(model, query_set, config, device).astype(np.float32)
 
-    index = faiss.index_factory(config['embedding_size'], 'SQfp16')#Flat')
+    #index = faiss.index_factory(config['embedding_size'], 'SQfp16')#Flat')
+    index = faiss.IndexFlatIP(config['embedding_size'])
+    faiss.normalize_L2(code_embedding)
     index.train(code_embedding)
     index.add(code_embedding)
 
+    faiss.normalize_L2(q_emb)
     distances, neighbors = index.search(q_emb, top_k)
     neighbors_list = [list(n) for n in neighbors]
     neigh_set = test_set.select(flatten(neighbors_list))

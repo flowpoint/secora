@@ -7,33 +7,6 @@ from abc import abstractmethod
 from abc import ABC
 from functools import wraps
 
-required_keys = '''
-hostname
-port
-name
-batch_size
-seed
-epochs
-shards
-grad_accum
-warmup_batches
-temp
-top_k
-checkpoint_dir
-max_checkpoints
-model_name
-learning_rate
-finetune_mode
-languages
-preprocess_cores
-preprocess_mode
-max_input_tokens
-optimizer
-precision
-lr_schedule
-dropout
-'''
-
 def check_config(config):
     if not isinstance(config, dict):
         raise ValueError("the passed object is not a dict")
@@ -137,6 +110,9 @@ class Setting(ABC):
             raise RuntimeError(f'setting: {self._name} value must be set before reading')
         return self._value
 
+    def final(self):
+        self._is_set = True
+
     def set(self, val):
         ''' settings are intended to be immutable for the remaining code '''
 
@@ -147,15 +123,15 @@ class Setting(ABC):
         if not self.check(val) == True:
             raise ValueError(f'trying to set setting: {self._name} to prohibited value of: {val}')
 
-        self._is_set = True
+        self.final()
         self._value = val
 
     def check_type(self, val) -> bool:
         if type(val) != self.allowed_type:
-            raise TypeError(f'val is expected to be of type: {self.allowed_type}')
+            raise TypeError(f'{val} is expected to be of type: {self.allowed_type}')
 
         if not isinstance(val, self.allowed_type):
-            raise ValueError(f'val has to be a type but is {self.allowed_type}')
+            raise ValueError(f'{val} has to be a type but is {self.allowed_type}')
         ''' to be implemented by subclasses '''
         return True
 
@@ -184,6 +160,28 @@ class Option(Setting):
             self.set(self._default)
         return super().value
 
+class BoolSetting(Setting):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    @property
+    def allowed_type(self):
+        return bool
+
+    def check(self, val):
+        return True
+    
+
+class BoolOption(Option):
+    def __init__(self, name, default, *args, **kwargs):
+        super().__init__(name, default, *args, **kwargs)
+
+    @property
+    def allowed_type(self):
+        return bool
+
+    def check(self, val):
+        return True
 ##
 class IntSetting(Setting):
     def __init__(self, name, lb=None, ub=None, *args, **kwargs):
@@ -196,9 +194,9 @@ class IntSetting(Setting):
         return int
 
     def check(self, val):
-        if self._lb is not None and val <= self._lb:
+        if self._lb is not None and val < self._lb:
             return False
-        if self._ub is not None and val > self._ub:
+        if self._ub is not None and val >= self._ub:
             return False
         return True
 
@@ -217,9 +215,9 @@ class IntOption(Option):
         return int
 
     def check(self, val):
-        if self._lb is not None and val <= self._lb:
+        if self._lb is not None and val < self._lb:
             return False
-        if self._ub is not None and val > self._ub:
+        if self._ub is not None and val >= self._ub:
             return False
         return True
 
@@ -235,9 +233,9 @@ class FloatSetting(Setting):
         return float
 
     def check(self, val):
-        if self._lb is not None and val <= self._lb:
+        if self._lb is not None and val < self._lb:
             return False
-        if self._ub is not None and val > self._ub:
+        if self._ub is not None and val >= self._ub:
             return False
         return True
 
@@ -256,9 +254,9 @@ class FloatOption(Option):
         return float
 
     def check(self, val):
-        if self._lb is not None and val <= self._lb:
+        if self._lb is not None and val < self._lb:
             return False
-        if self._ub is not None and val > self._ub:
+        if self._ub is not None and val >= self._ub:
             return False
         return True
 
@@ -382,8 +380,24 @@ class SimpleConfig:
         return self._settings[name].value
 
     def check(self) -> bool:
-        for k, v in self._settings:
+        for k, v in self._settings.items():
             v.check(v.value)
+
+    def to_dict(self):
+        d = dict()
+        for k, v in self._settings.items():
+            d[k] = v.value
+
+        return d
+
+
+    def final(self):
+        for v in self._settings.values():
+            v.final()
+
+    @property
+    def settings(self):
+        return self._settings
 
     def compose(self, config2):
         nconf = SimpleConfig()

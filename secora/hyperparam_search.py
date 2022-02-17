@@ -32,14 +32,10 @@ def callback(state_tracker, score, config, **kwargs):
         raise optuna.exceptions.TrialPruned()
 
 
-def hyperopt_worker(rank, default_config, progress, debug, master_port):
+def hyperopt_worker(rank, default_config, progress, debug):
     n_trials = 8
 
     world_size = default_config['num_gpus']
-    host_name = default_config['hostname']
-
-    os.environ['MASTER_ADDR'] = host_name
-    os.environ['MASTER_PORT'] = master_port
 
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(65))
     logger = make_logger(default_config, debug=debug, rank=rank)
@@ -174,10 +170,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
-    parser.add_argument('--port', type=int, default=random.randint(10000, 15000))
 
     args = parser.parse_args()
-    master_port = str(args.port)
 
     config = load_config(args.config_path)
     config = overwrite_config(args, config)
@@ -193,7 +187,7 @@ if __name__ == "__main__":
 
     mp.set_start_method('spawn')
     mp.spawn(hyperopt_worker, 
-            args=(config, args.progress, args.debug, master_port),
+            args=(config, args.progress, args.debug),
             nprocs = config['num_gpus'],
             join=True)
 

@@ -16,6 +16,8 @@ from data import deviceloader
 
 
 def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu', **kwargs):
+    embedding_size = model.embedding_size
+
     rank = device#dist.get_rank()
 
     batch_size = data_loader.batch_size
@@ -88,8 +90,8 @@ def k_nearest_neighbors(
 
     if rank == 0:
         #build the faiss index
-        q_space = torch.cat(q_gathered, -2).to('cpu').numpy()
-        v_space = torch.cat(v_gathered, -2).to('cpu').numpy()
+        q_space = torch.cat(q_gathered, -2).to('cpu').numpy().astype(np.float32)
+        v_space = torch.cat(v_gathered, -2).to('cpu').numpy().astype(np.float32)
 
         logger = kwargs['logger']
         logger.debug('building knn index')
@@ -97,10 +99,13 @@ def k_nearest_neighbors(
         logger.debug(f'v_space: {v_space.shape}')
         logger.debug(f'embedding: {embedding_size}')
 
-        index = faiss.index_factory(embedding_size, 'SQfp16')#Flat')
+        #index = faiss.index_factory(embedding_size, 'SQfp16')#Flat')
+        index = faiss.IndexFlatIP(embedding_size)
+        faiss.normalize_L2(v_space)
         index.train(v_space)
         index.add(v_space)
 
+        faiss.normalize_L2(q_space)
         distances, neighbors = index.search(q_space, top_k)
 
         return distances, neighbors

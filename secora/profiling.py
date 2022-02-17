@@ -56,12 +56,12 @@ def profile(config, modes, **kwargs):
     logger = kwargs['logger']
 
     #needed for warmup anyway
-    train_set = preprocess_split('train', config, limit_samples=config['batch_size']*50, **kwargs)
+    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=config['batch_size']*50, **kwargs)
     train_loader = get_loader(train_set, config)
     train_iter = iter(deviceloader(train_loader, rank))
 
     if 'validation' in modes or 'embedding' in modes:
-        valid_set = preprocess_split('validation', config, limit_samples=config['batch_size']*5, **kwargs)
+        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=config['batch_size']*5, **kwargs)
         valid_loader = get_loader(valid_set, config)
 
     logger.info('building model')

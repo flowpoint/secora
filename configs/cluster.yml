@@ -6,8 +6,6 @@ checkpoint_dir: "/scratch/fhoels2s/cluster_output"
 
 name: 'cluster_run_name'
 seed: 42
-hostname: localhost
-port: 42855
 max_checkpoints: 5
 
 num_gpus: 'auto'

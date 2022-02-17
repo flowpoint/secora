@@ -6,19 +6,15 @@ import torch.nn.functional as F
 
 import math
 
-def contrastive_loss(model, model_inputs, config):
+def contrastive_loss(emb1, emb2, temp: float):
     ''' the loss used by simcse
     inspired by:
     https://github.com/princeton-nlp/SimCSE/blob/main/simcse/models.py
     '''
 
-    biemb = model(*model_inputs)
-    emb1 = biemb[:,0]
-    emb2 = biemb[:,1]
-
     # use the exact same loss from the simcse repository
-    sim = F.cosine_similarity(emb1.unsqueeze(1), emb2.unsqueeze(0), dim=-1) / config['temp']
-    labels = torch.arange(sim.size(0), dtype=torch.int64, device=sim.get_device())
+    sim = F.cosine_similarity(emb1.unsqueeze(1), emb2.unsqueeze(0), dim=-1) / temp
+    labels = torch.arange(sim.size(0), dtype=torch.int64, device=sim.device)
     loss = F.cross_entropy(sim, labels)
 
     return loss

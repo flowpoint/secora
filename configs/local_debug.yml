@@ -1,11 +1,13 @@
-logdir: "./output"
+logdir: "/tmp/output"
 checkpoint_dir: "./output"
 
-name: 'debug_train_0_0'
+name: 'hypersearch_full_2'
 seed: 42
-max_checkpoints: 0
+hostname: localhost
+port: 12355
+max_checkpoints: 3
 
-num_gpus: 1 #'auto'
+num_gpus: 'auto'
 precision: mixed
 cuda_graphs: False
 
@@ -31,6 +33,5 @@ grad_accum: 64 # counted in batches
 temp: 0.05
 dropout: 0.1
 
-#embedding_size: 128
-embedding_size: 768
+embedding_size: 128
 top_k:  10

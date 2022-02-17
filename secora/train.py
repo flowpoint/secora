@@ -1,10 +1,12 @@
 import os
 import time
 from time import time
+from enum import Enum, auto
 
 from math import ceil
 import argparse
 import datetime
+import re
 
 import pdb
 
@@ -26,7 +28,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
 
 from model import *
+
 from data import *
+import data
 from config import *
 from infer import build_embedding_space, k_nearest_neighbors, validate
 from losses import contrastive_loss, mrr
@@ -35,6 +39,76 @@ from tracking import *
 from SM3 import SM3
 
 TIMEOUT = datetime.timedelta(65)
+
+class RunNameSetting(Setting):
+    ''' enforces a naming scheme for training runs 
+    prefix = run | test | debug | profile
+    readable name = a0
+    run number = 0
+    trial number = 0
+    example:
+    run_a0name_0_0
+    '''
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+        self.scheme = re.compile('(run|test|debug|profile)_\w\w*_\d+(_\d)*\Z')
+
+    @property
+    def allowed_type(self):
+        return str
+
+    def check(self, val):
+        matched = self.scheme.match(val) is not None
+        return matched
+
+class FinetuneMode(Enum):
+    ALL = auto()
+    POOLING = auto()
+
+class ScheduleEnum(Enum):
+    LINEAR = auto()
+    CONSTANT = auto()
+    
+class OptimizerEnum(Enum):
+    ADAM = torch.optim.Adam
+    ADAMW = torch.optim.AdamW
+    SGD = torch.optim.SGD
+    SM3 = SM3
+
+def build_training_config():
+    config = SimpleConfig()
+    config.add(IntSetting('batch_size', lb=1))
+    config.add(IntSetting('seed', lb=0))
+    config.add(IntSetting('epochs', lb=1))
+    config.add(IntSetting('shards', lb=1))
+    config.add(IntSetting('grad_accum', lb=1))
+    config.add(IntSetting('warmup_batches',lb=0))
+    config.add(FloatSetting('temp', lb=0., ub=1.))
+    config.add(IntSetting('top_k', lb=0))
+    config.add(DirectorySetting('checkpoint_dir'))
+    config.add(IntSetting('max_checkpoints', lb=0))
+    config.add(EnumSetting('model_name',BaseModel))
+    config.add(FloatSetting('learning_rate', lb=0.))
+    config.add(EnumSetting('finetune_mode', FinetuneMode))
+    config.add(EnumSetting('languages', data.LanguageEnum))
+    config.add(IntSetting('preprocess_cores', lb=1))
+    config.add(EnumSetting('preprocess_mode', data.PreprocessMode))
+    config.add(IntSetting('max_input_tokens', lb=1))
+    config.add(EnumSetting('optimizer', OptimizerEnum))
+    config.add(EnumSetting('precision', Precision))
+    config.add(EnumSetting('lr_schedule', ScheduleEnum))
+    config.add(FloatSetting('dropout', lb=0., ub=1))
+    config.add(RunNameSetting('name'))
+    config.add(IntSetting('num_gpus', lb=0))
+    config.add(BoolSetting('cuda_graphs'))
+    config.add(IntSetting('embedding_size', lb=0))
+    config.add(FloatSetting('grad_clip', lb=0.))
+
+    
+    config.add(DirectorySetting('logdir'))
+    config.add(DirectorySetting('checkpoint_dir'))
+
+    return config
 
 def train_shard(
         state_tracker,
@@ -56,7 +130,7 @@ def train_shard(
 
     model.train()
 
-    grad_accum = config['grad_accum']
+    grad_accum = kwargs['grad_accum']
     shard_loss = torch.tensor([0.], device=rank, requires_grad=False)
 
     if rank == 0 and kwargs['progress'] == True:
@@ -71,11 +145,12 @@ def train_shard(
     for step, batch in enumerate(deviceloader(train_loader, rank)):
         model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
 
+        biemb = model(*model_inputs)
+        emb1 = biemb[:,0]
+        emb2 = biemb[:,1]
+
         loss = scaler.scale(
-                contrastive_loss(
-                    model, 
-                    model_inputs,
-                    config))
+            contrastive_loss(emb1, emb2, config['temp']))
 
         shard_loss.add_(loss.detach())
 
@@ -95,9 +170,7 @@ def train_shard(
             loss.backward()
 
             #gradient clipping
-            if 'grad_clip' in config and config['grad_clip'] is not None:
-                if config['grad_clip'] == 0:
-                    raise ValueError('grad_clip cant be 0')
+            if 'grad_clip' in config.settings and config['grad_clip'] != 0.:
                 scaler.unscale_(optim)
                 clip_grad_norm_(
                         model.parameters(), 
@@ -127,12 +200,13 @@ def train_shard(
 
 
 def train(config, preempt_callback=None, **kwargs):
-    check_config(config)
+    #check_config(config)
 
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        save_config(config, path)
+        #save_config(config, path)
+        #save_config(config.to_dict(), path)
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     else:
@@ -143,18 +217,21 @@ def train(config, preempt_callback=None, **kwargs):
 
     if kwargs['debug'] == True:
         limit = 10*config['grad_accum']*config['batch_size']
-        train_set = preprocess_split('train', config, limit_samples=limit, **kwargs)
-        valid_set = preprocess_split('validation', config, limit_samples=limit, **kwargs)
+        train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=limit, **kwargs)
+        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
     else:
-        train_set = preprocess_split('train', config, **kwargs)
-        valid_set = preprocess_split('validation', config, **kwargs)
+        train_set = preprocess_split(data.DataSplit.TRAIN, config, **kwargs)
+        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, **kwargs)
 
     # both sets arent shuffled, shuffle train set every epoch manually
-    train_loader = get_loader(train_set, config)
+    train_loader = get_loader(train_set, config, **kwargs)
     valid_loader = get_loader(valid_set, config, **kwargs)
 
     logger.info('building model')
-    m = BiEmbeddingModel(config).to(rank)
+    if config['num_gpus'] > 0:
+        m = BiEmbeddingModelCuda(config['model_name'], 768, Precision.FP16, hidden_dropout_prob=config['dropout']).to(rank)
+    else:
+        m = BiEmbeddingModel(config['model_name'], 768, Precision.FP16, hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
@@ -172,15 +249,16 @@ def train(config, preempt_callback=None, **kwargs):
         dist.barrier()
 
     logger.info('building DDP model')
-    model = DDP(m, device_ids=[rank])
+    model = DDP(m, device_ids=[rank], find_unused_parameters=True)
+    model.embedding_size = m.embedding_size
 
-    if config['finetune_mode'] == 'all':
+    if config['finetune_mode'] == FinetuneMode.ALL:
         params = model.parameters()
-    elif config['finetune_mode'] == 'pooling':
+    elif config['finetune_mode'] == FinetuneMode.POOLING:
         params = model.pooling.parameters()
-    else:
-        raise RuntimeError('finetune_mode has to be: all or pooling')
 
+    optim = config['optimizer'].value(params, lr=config['learning_rate'])
+    '''
     if config['optimizer'] == 'adam':
         optim = torch.optim.Adam(params, lr=config['learning_rate'])
     elif config['optimizer'] == 'adamw':
@@ -191,23 +269,22 @@ def train(config, preempt_callback=None, **kwargs):
         optim = SM3(params, lr=config['learning_rate'])
     else:
         raise RuntimeError('config specifies an unsupported optimizer')
+    '''
 
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
     num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
 
-    if config['lr_schedule'] == 'linear':
-        scheduler = transformers.get_linear_schedule_with_warmup(
+    if config['lr_schedule'] == ScheduleEnum.LINEAR:
+        scheduler = get_linear_schedule_with_warmup(
                 optim,
                 num_warmup_steps=num_warmup_steps,
                 num_training_steps=num_training_steps)
-    elif config['lr_schedule'] == 'constant':
-        scheduler = transformers.get_constant_schedule_with_warmup(
+    elif config['lr_schedule'] == ScheduleEnum.CONSTANT:
+        scheduler = get_constant_schedule_with_warmup(
                 optim,
                 num_warmup_steps=num_warmup_steps
                 )
-    else:
-        raise ValueError('invalid lr_schedule')
 
     scaler = GradScaler()
 
@@ -231,10 +308,12 @@ def train(config, preempt_callback=None, **kwargs):
         num_shards = 2
         training_progress.epoch = 0
         training_progress.shard = 0
-        config['grad_accum'] = 1
+        grad_accum = 1
+        #config['grad_accum'] = 1
     else:
         num_epochs = config['epochs']
         num_shards = config['shards']
+        grad_accum = config['grad_accum']
 
     shard_size = len(train_set)/num_shards
     val_size = len(valid_set)
@@ -260,6 +339,7 @@ def train(config, preempt_callback=None, **kwargs):
                 train_loader,
                 config,
                 writer,
+                grad_accum=grad_accum,
                 **kwargs
                 )
 
@@ -291,13 +371,8 @@ def train(config, preempt_callback=None, **kwargs):
     return score
 
 
-def training_worker(rank, config, progress, debug, master_port):
+def training_worker(rank, config, progress, debug):
     world_size = config['num_gpus']
-    host_name = config['hostname']
-    #port = config['port']
-
-    os.environ['MASTER_ADDR'] = host_name
-    os.environ['MASTER_PORT'] = master_port
 
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
@@ -310,22 +385,40 @@ def training_worker(rank, config, progress, debug, master_port):
     dist.destroy_process_group()
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
     parser.add_argument('config_path', type=str)
-
     parser.add_argument('--run_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
-    parser.add_argument('--port', type=int, default=np.random.randint(10000, 15000))
-
     args = parser.parse_args()
-    master_port = str(args.port)
 
-    config = load_config(args.config_path)
-    config = overwrite_config(args, config)
+    config = build_training_config()
+
+    with open(args.config_path, 'r') as f:
+        config_candidate = yaml.safe_load(f)
+
+    #parsed_config = {'name':args.run_name, 'batch_size': args.batch_size}
+
+    #config_candidate.update(parsed_config)
+
+    config_candidate['precision']  = Precision.FP16
+    config_candidate['preprocess_mode']  = PreprocessMode.CONCAT
+    config_candidate['languages']  = data.LanguageEnum.PYTHON
+    config_candidate['finetune_mode']  = FinetuneMode.ALL
+    config_candidate['optimizer']  = OptimizerEnum.ADAM
+    config_candidate['model_name']  = BaseModel.CODEBERT
+    config_candidate['lr_schedule']  = ScheduleEnum.CONSTANT
+    config_candidate['cuda_graphs'] = False
+    config_candidate['learning_rate'] = 1e-5
+    config_candidate['grad_clip'] = 0.
+
+    for k,v in config_candidate.items():
+        config[k] = v
+
+    config.check()
+    config.final()
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
@@ -341,7 +434,7 @@ if __name__ == "__main__":
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 
-            args=(config, args.progress, args.debug, master_port),
+            args=(config, args.progress, args.debug),
             nprocs = config['num_gpus'],
             join=True)
 

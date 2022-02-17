@@ -7,7 +7,16 @@ from torch.utils.data.distributed import DistributedSampler
 import datasets
 from datasets import load_dataset
 from transformers import AutoTokenizer
+from enum import Enum, auto
 
+class LanguageEnum(Enum):
+    PYTHON = 'python'
+    JAVA = 'java'
+    PHP = 'php'
+    JAVASCRIPT = 'javascript'
+    RUBY = 'ruby'
+    GO = 'go'
+    ALL = 'all'
 
 def preproc_valid(sample):
     # delete docstring from code samples
@@ -34,15 +43,17 @@ def fair_truncate(doc, code, max_length):
 
     return d, c
 
+class PreprocessMode(Enum):
+    CONCAT = auto()
 
 def tokenize_train_sample(tokenizer, batch, config):
     ''' this is run in batch mode, so the features are batched '''
     max_length = config['max_input_tokens']
 
     mode = config['preprocess_mode']
-    if mode == 'joint':
-        whole = batch['whole_func_string']
-    elif mode == 'concat':
+    #if mode == V'joint':
+    #    whole = batch['whole_func_string']
+    if mode == PreprocessMode.CONCAT:
         whole = []
         for doc, code in zip(batch['func_documentation_tokens'],batch['func_code_tokens']):
             d, c = fair_truncate(
@@ -84,26 +95,34 @@ def tokenize_valid_sample(tokenizer, batch, config):
 
     return proc_batch
 
+class DataSplit(Enum):
+    TRAIN = 'train'
+    VALIDATION = 'validation'
+    TEST = 'test'
+    EVAL = 'eval'
 
 def preprocess_split(split, config, limit_samples=-1, **kwargs):
-    if split not in ["train", "validation", "test", "eval"]:
+    if not isinstance(split, DataSplit):
         raise RuntimeError(f"invalid dataset split: {split}")
 
     datasets.set_progress_bar_enabled(kwargs['progress'])
-    tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
+    tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
 
-    if split == "eval":
+    num_proc = config['preprocess_cores']
+
+    if split == DataSplit.EVAL:
         dataset = load_dataset("code_search_net")['train']
     else:
-        dataset = load_dataset("code_search_net")[split]
+        dataset = load_dataset("code_search_net")[split.value]
 
     if limit_samples >= 1:
         dataset = dataset.select(range(limit_samples))
 
-    dataset = dataset.filter(lambda x: x['language'] in config['languages'] or 'all' in config['languages'], num_proc=config['preprocess_cores'])
+    if config['languages'] != LanguageEnum.ALL:
+        dataset = dataset.filter(lambda x: x['language'] == config['languages'].value, num_proc=num_proc)
 
-    if split != "train":
-        dataset = dataset.map(preproc_valid, batched=False, num_proc=config['preprocess_cores'])
+    if split != DataSplit.TRAIN:
+        dataset = dataset.map(preproc_valid, batched=False, num_proc=num_proc)
 
     dataset = dataset.rename_column("func_code_url", "url")
 
@@ -113,7 +132,7 @@ def preprocess_split(split, config, limit_samples=-1, **kwargs):
 
     # preprocess tokenize the dataset once
     # by using batched, the tokenizer automatically pads and truncates to the same length
-    if split == "train":
+    if split == DataSplit.TRAIN:
         def tokenize_fn(x): return tokenize_train_sample(tokenizer, x, config)
     else:
         def tokenize_fn(x): return tokenize_valid_sample(tokenizer, x, config)
@@ -122,7 +141,7 @@ def preprocess_split(split, config, limit_samples=-1, **kwargs):
             tokenize_fn,
             remove_columns=set(dataset.column_names) - {'url', 'language'},
             batched=True,
-            num_proc=config['preprocess_cores'])
+            num_proc=num_proc)
 
     # cast dataset to torch tensors
     dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url','language'}, output_all_columns=True)
