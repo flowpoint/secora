@@ -8,15 +8,30 @@ import datasets
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from enum import Enum, auto
+from config import Setting
 
-class LanguageEnum(Enum):
-    PYTHON = 'python'
-    JAVA = 'java'
-    PHP = 'php'
-    JAVASCRIPT = 'javascript'
-    RUBY = 'ruby'
-    GO = 'go'
-    ALL = 'all'
+LANGUAGES = ['python',
+    'java',
+    'php',
+    'javascript',
+    'ruby',
+    'go',
+    'all',]
+
+class LanguageSetting(Setting):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def parse(self, s):
+        return s
+
+    @property
+    def allowed_type(self):
+        return list
+
+    def check(self, val_list):
+        return all([x in LANGUAGES for x in val_list])
+
 
 def preproc_valid(sample):
     # delete docstring from code samples
@@ -44,7 +59,7 @@ def fair_truncate(doc, code, max_length):
     return d, c
 
 class PreprocessMode(Enum):
-    CONCAT = auto()
+    CONCAT = 'concat'
 
 def tokenize_train_sample(tokenizer, batch, config):
     ''' this is run in batch mode, so the features are batched '''
@@ -118,8 +133,8 @@ def preprocess_split(split, config, limit_samples=-1, **kwargs):
     if limit_samples >= 1:
         dataset = dataset.select(range(limit_samples))
 
-    if config['languages'] != LanguageEnum.ALL:
-        dataset = dataset.filter(lambda x: x['language'] == config['languages'].value, num_proc=num_proc)
+    if config['languages'] != 'all':
+        dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=num_proc)
 
     if split != DataSplit.TRAIN:
         dataset = dataset.map(preproc_valid, batched=False, num_proc=num_proc)

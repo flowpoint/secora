@@ -33,6 +33,7 @@ batch_size: 16
 grad_accum: 64 # counted in batches
 temp: 0.05
 dropout: 0.1
+grad_clip: 0.
 
 embedding_size: 128
 top_k:  10

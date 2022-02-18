@@ -62,53 +62,63 @@ class RunNameSetting(Setting):
         return matched
 
 class FinetuneMode(Enum):
-    ALL = auto()
-    POOLING = auto()
+    ALL = 'all'
+    POOLING = 'pooling'
 
 class ScheduleEnum(Enum):
-    LINEAR = auto()
-    CONSTANT = auto()
+    LINEAR = 'linear'
+    CONSTANT = 'constant'
     
 class OptimizerEnum(Enum):
-    ADAM = torch.optim.Adam
-    ADAMW = torch.optim.AdamW
-    SGD = torch.optim.SGD
-    SM3 = SM3
+    ADAM = 'adam'
+    ADAMW = 'adamw'
+    SGD = 'sgd'
+    SM3 = 'sm3'
 
-def build_training_config():
-    config = SimpleConfig()
-    config.add(IntSetting('batch_size', lb=1))
-    config.add(IntSetting('seed', lb=0))
-    config.add(IntSetting('epochs', lb=1))
-    config.add(IntSetting('shards', lb=1))
-    config.add(IntSetting('grad_accum', lb=1))
-    config.add(IntSetting('warmup_batches',lb=0))
-    config.add(FloatSetting('temp', lb=0., ub=1.))
-    config.add(IntSetting('top_k', lb=0))
-    config.add(DirectorySetting('checkpoint_dir'))
-    config.add(IntSetting('max_checkpoints', lb=0))
-    config.add(EnumSetting('model_name',BaseModel))
-    config.add(FloatSetting('learning_rate', lb=0.))
-    config.add(EnumSetting('finetune_mode', FinetuneMode))
-    config.add(EnumSetting('languages', data.LanguageEnum))
-    config.add(IntSetting('preprocess_cores', lb=1))
-    config.add(EnumSetting('preprocess_mode', data.PreprocessMode))
-    config.add(IntSetting('max_input_tokens', lb=1))
-    config.add(EnumSetting('optimizer', OptimizerEnum))
-    config.add(EnumSetting('precision', Precision))
-    config.add(EnumSetting('lr_schedule', ScheduleEnum))
-    config.add(FloatSetting('dropout', lb=0., ub=1))
-    config.add(RunNameSetting('name'))
-    config.add(IntSetting('num_gpus', lb=0))
-    config.add(BoolSetting('cuda_graphs'))
-    config.add(IntSetting('embedding_size', lb=0))
-    config.add(FloatSetting('grad_clip', lb=0.))
+_optimizer_mapping = {'adam': torch.optim.Adam,
+        'adamw': torch.optim.AdamW,
+        'sgd': torch.optim.SGD,
+        'sm3': SM3
+        }
 
-    
-    config.add(DirectorySetting('logdir'))
-    config.add(DirectorySetting('checkpoint_dir'))
 
-    return config
+class TrainingConfig(SimpleConfig):
+    def __init__(self):
+        super().__init__()
+        #self.config = SimpleConfig()
+
+        setts = [IntSetting('batch_size', lb=1),
+            IntSetting('seed', lb=0),
+            IntSetting('epochs', lb=1),
+            IntSetting('shards', lb=1),
+            IntSetting('grad_accum', lb=1),
+            IntSetting('warmup_batches',lb=0),
+            FloatSetting('temp', lb=0., ub=1.),
+            IntSetting('top_k', lb=0),
+            DirectorySetting('checkpoint_dir'),
+            IntSetting('max_checkpoints', lb=0),
+            EnumSetting('model_name',BaseModel),
+            FloatSetting('learning_rate', lb=0.),
+            EnumSetting('finetune_mode', FinetuneMode),
+            data.LanguageSetting('languages'),
+            IntSetting('preprocess_cores', lb=1),
+            EnumSetting('preprocess_mode', data.PreprocessMode),
+            IntSetting('max_input_tokens', lb=1),
+            EnumSetting('optimizer', OptimizerEnum),
+            EnumSetting('amp', AMP),
+            EnumSetting('lr_schedule', ScheduleEnum),
+            FloatSetting('dropout', lb=0., ub=1),
+            RunNameSetting('name'),
+            IntSetting('num_gpus', lb=0),
+            BoolSetting('cuda_graphs'),
+            IntSetting('embedding_size', lb=0),
+            FloatSetting('grad_clip', lb=0.),
+            DirectorySetting('logdir'),
+            DirectorySetting('checkpoint_dir')]
+
+        for s in setts:
+            self.add(s)
+
 
 def train_shard(
         state_tracker,
@@ -131,7 +141,7 @@ def train_shard(
     model.train()
 
     grad_accum = kwargs['grad_accum']
-    shard_loss = torch.tensor([0.], device=rank, requires_grad=False)
+    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
 
     if rank == 0 and kwargs['progress'] == True:
         bar = tqdm(
@@ -149,8 +159,11 @@ def train_shard(
         emb1 = biemb[:,0]
         emb2 = biemb[:,1]
 
-        loss = scaler.scale(
-            contrastive_loss(emb1, emb2, config['temp']))
+        closs = contrastive_loss(emb1, emb2, config['temp'])
+        if config['amp'] != model.AMP.OFF:
+            loss = scaler.scale(closs)
+        else:
+            loss = closs
 
         shard_loss.add_(loss.detach())
 
@@ -176,7 +189,7 @@ def train_shard(
                         model.parameters(), 
                         max_norm=config['grad_clip'])
 
-            if config['precision'] == 'mixed':
+            if config['amp'] != model.AMP.OFF:
                 scaler.step(optim)
                 scaler.update()
             else:
@@ -229,9 +242,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     logger.info('building model')
     if config['num_gpus'] > 0:
-        m = BiEmbeddingModelCuda(config['model_name'], 768, Precision.FP16, hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModelCuda(config['model_name'], 768, AMP.FP16, hidden_dropout_prob=config['dropout']).to(rank)
     else:
-        m = BiEmbeddingModel(config['model_name'], 768, Precision.FP16, hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModel(config['model_name'], 768, AMP.FP16, hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
@@ -257,19 +270,7 @@ def train(config, preempt_callback=None, **kwargs):
     elif config['finetune_mode'] == FinetuneMode.POOLING:
         params = model.pooling.parameters()
 
-    optim = config['optimizer'].value(params, lr=config['learning_rate'])
-    '''
-    if config['optimizer'] == 'adam':
-        optim = torch.optim.Adam(params, lr=config['learning_rate'])
-    elif config['optimizer'] == 'adamw':
-        optim = torch.optim.AdamW(params, lr=config['learning_rate'])
-    elif config['optimizer'] == 'sgd':
-        optim = torch.optim.SGD(params, lr=config['learning_rate'])
-    elif config['optimizer'] == 'sm3':
-        optim = SM3(params, lr=config['learning_rate'])
-    else:
-        raise RuntimeError('config specifies an unsupported optimizer')
-    '''
+    optim = _optimizer_mapping[config['optimizer'].value](params, lr=config['learning_rate'])
 
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
     num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
@@ -387,35 +388,32 @@ def training_worker(rank, config, progress, debug):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
-    parser.add_argument('config_path', type=str)
-    parser.add_argument('--run_name', type=str, default=None)
+    parser.add_argument('config_file', type=argparse.FileType('r'))
+    # these values override the config values if specified
+    parser.add_argument('--name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
+    # 
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
     args = parser.parse_args()
 
-    config = build_training_config()
+    config = TrainingConfig()
 
-    with open(args.config_path, 'r') as f:
+    #with open(args.config_file, 'r') as f:
+    with args.config_file as f:
         config_candidate = yaml.safe_load(f)
 
     #parsed_config = {'name':args.run_name, 'batch_size': args.batch_size}
-
     #config_candidate.update(parsed_config)
 
-    config_candidate['precision']  = Precision.FP16
-    config_candidate['preprocess_mode']  = PreprocessMode.CONCAT
-    config_candidate['languages']  = data.LanguageEnum.PYTHON
-    config_candidate['finetune_mode']  = FinetuneMode.ALL
-    config_candidate['optimizer']  = OptimizerEnum.ADAM
-    config_candidate['model_name']  = BaseModel.CODEBERT
-    config_candidate['lr_schedule']  = ScheduleEnum.CONSTANT
-    config_candidate['cuda_graphs'] = False
-    config_candidate['learning_rate'] = 1e-5
-    config_candidate['grad_clip'] = 0.
+    if args.name is not None:
+        config_candidate['name'] = args.name
+
+    if args.batch_size is not None:
+        config_candidate['batch_size'] = args.batch_size
 
     for k,v in config_candidate.items():
-        config[k] = v
+        config[k] = config.settings[k].parse(v)
 
     config.check()
     config.final()

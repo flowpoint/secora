@@ -61,7 +61,10 @@ class BiEmbeddingModel(torch.nn.Module):
     def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
         super().__init__()
         self.m = EmbeddingModel(basemodel, embsize, **kwargs)
-        self.embedding_size = self.m.embedding_size
+
+    @property
+    def embedding_size(self):
+        return self.m.embedding_size
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
         x1 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
@@ -75,18 +78,29 @@ class BiEmbeddingModel(torch.nn.Module):
             return torch.unsqueeze(x1, dim=1)
 
 
-class Precision(Enum):
-    FP32 = torch.float32
-    FP16 = torch.float16
-    BF16 = torch.bfloat16
-    MIXED = auto()
-    KEEP = auto()
+class AMP(Enum):
+    FP32 = 'fp32'
+    FP16 = 'fp16'
+    BF16 = 'bf16'
+    DEFAULT = 'default'
+    DISABLE = 'disable'
 
-class BiEmbeddingModelCuda(BiEmbeddingModel):
-    def __init__(self, basemodel: BaseModel, embsize: int, prec: Precision, **kwargs):
-        super().__init__(basemodel, embsize, **kwargs)
-        self.precision = prec#config['precision']
+_precision_map = {
+        'fp32': torch.float32,
+        'fp16': torch.float16,
+        'bf16': torch.bfloat16
+        }
+
+class BiEmbeddingModelCuda(torch.nn.Module):
+    def __init__(self, basemodel: BaseModel, embsize: int, amp: AMP, **kwargs):
+        super().__init__()
+        self.m = BiEmbeddingModel(basemodel, embsize, **kwargs)
+        self.amp = amp
         self.is_graphed = False
+
+    @property
+    def embedding_size(self):
+        return self.m.embedding_size
 
     def make_graphed(self, dummy_inputs):
         if self.is_graphed == True:
@@ -100,8 +114,9 @@ class BiEmbeddingModelCuda(BiEmbeddingModel):
         torch.cuda.synchronize()
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
-        with autocast(enabled=(self.precision != Precision.KEEP), dtype=self.precision.value):
-            return super().forward(input_ids, token_type_ids, attention_mask, *args, **kwargs)
+        tp = {'dtype': _precision_map[self.amp.value]}
+        with autocast(enabled=(self.amp != AMP.DISABLE), **tp):
+            return self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
 
 
 def get_model(checkpoint_path, config, device):

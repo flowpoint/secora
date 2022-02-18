@@ -16,6 +16,8 @@ module load cuda/11.2
 module load python3
 
 export HF_HOME=/scratch/fhoels2s/huggingface
+export MASTER_ADDR="localhost"
+export MASTER_PORT=$((15000 + $RANDOM % 5000))
 
 #debugging flags
 export TORCH_DISTRIBUTED_DEBUG=DETAIL

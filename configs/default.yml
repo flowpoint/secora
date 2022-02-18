@@ -3,10 +3,10 @@ checkpoint_dir: "./output"
 
 name: 'debug_train_0_0'
 seed: 42
-max_checkpoints: 0
+max_checkpoints: 3
 
 num_gpus: 1 #'auto'
-precision: mixed
+amp: default
 cuda_graphs: False
 
 preprocess_cores: 10
@@ -30,6 +30,7 @@ batch_size: 8
 grad_accum: 64 # counted in batches
 temp: 0.05
 dropout: 0.1
+grad_clip: 0.0
 
 #embedding_size: 128
 embedding_size: 768

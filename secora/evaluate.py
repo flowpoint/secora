@@ -10,6 +10,7 @@ from more_itertools import flatten, chunked
 from infer import *
 from model import *
 from data import *
+import data
 from config import load_config, overwrite_config
 
 from datasets import Dataset
@@ -37,14 +38,22 @@ def export_predictions(preds, queries):
 
 def get_model(checkpoint_path, config, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    model = BiEmbeddingModel(config).to(device)
+    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], Precision.FP16).to(device)
+    #model = EmbeddingModel(BaseModel.CODEBERT, config['embedding_size']).to(device)
     st2 = OrderedDict()
+
+    print(st.keys())
+
     for k in st.keys():
         v = st[k]
         #st2[k.removeprefix('module.')] = v
         st2[k.replace('module.', '', 1)] = v
         
-    model.load_state_dict(st2)
+    st2['m.pooling.weight'] = torch.zeros([768,768])
+    st2['m.pooling.bias'] = torch.zeros([768])
+    #st2.pop('m.pooling.bias')
+
+    model.m.load_state_dict(st2)
     return model
 
 def export_code_embedding(test_set, checkpoint_path, path, device, config):
@@ -71,7 +80,7 @@ def export_code_embedding(test_set, checkpoint_path, path, device, config):
 
 
 def get_q_emb(model, query_set, config, device):
-    tokenizer = AutoTokenizer.from_pretrained(config['model_name'])
+    tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
 
     def tokenize_fn(batch):
         return tokenizer(
@@ -128,7 +137,8 @@ if __name__ == '__main__':
     #config['languages'] = ['python', 'java', 'javascript', 'php', ]
     #config['languages'] = ['all']
     config['languages'] = ['python']
-
+    config['model_name'] = BaseModel.CODEBERT
+    config['languages'] = data.LanguageEnum.PYTHON
 
     model = get_model(checkpoint_path, config, device)
 

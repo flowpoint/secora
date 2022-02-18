@@ -11,10 +11,6 @@ def check_config(config):
     if not isinstance(config, dict):
         raise ValueError("the passed object is not a dict")
 
-    for k in required_keys.strip().split('\n'):
-        if not k.strip() in config:
-            raise ValueError(f'missing value in config: {k}')
-
 
 def load_config(path):
     ''' this verifies and translates the config yaml file 
@@ -99,6 +95,10 @@ class Setting(ABC):
     def name(self):
         return self._name
 
+    def parse(self, s):
+        t = self.allowed_type
+        return t(str(s))
+
     @property
     @abstractmethod
     def allowed_type(self):
@@ -128,7 +128,7 @@ class Setting(ABC):
 
     def check_type(self, val) -> bool:
         if type(val) != self.allowed_type:
-            raise TypeError(f'{val} is expected to be of type: {self.allowed_type}')
+            raise TypeError(f'{val} is expected to be of type: {self.allowed_type}, but is {type(val)}')
 
         if not isinstance(val, self.allowed_type):
             raise ValueError(f'{val} has to be a type but is {self.allowed_type}')
@@ -140,8 +140,15 @@ class Setting(ABC):
         ''' to be implemented by subclasses '''
         raise NotImplementedError()
 
+    #def __repr__(self):
+    # return f"Setting('{self._name}')"
+
     def __repr__(self):
-        return f"Setting('{self._name}')"
+        return f'{{"{self._name}": "{self._value}"}}'
+
+    def __str__(self):
+        return f'{{"{self._name}": "{self._value}"}}'
+
 
 
 class Option(Setting):
@@ -163,6 +170,12 @@ class Option(Setting):
 class BoolSetting(Setting):
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
+
+    def parse(self, s):
+        if isinstance(s, str):
+            return s == 'False'
+        if isinstance(s, bool):
+            return s
 
     @property
     def allowed_type(self):
@@ -239,10 +252,6 @@ class FloatSetting(Setting):
             return False
         return True
 
-    def __repr__(self):
-        return f"FloatSetting('{self._name}')"
-
-
 class FloatOption(Option):
     def __init__(self, name, default, lb=None, ub=None, *args, **kwargs):
         self._lb = lb
@@ -266,16 +275,15 @@ class EnumSetting(Setting):
         self.enum = enum
         super().__init__(name, *args, **kwargs)
 
+    def parse(self, s):
+        return self.enum(s)
+
     @property
     def allowed_type(self):
         return self.enum
 
     def check(self, val):
         return True
-
-    def __repr__(self):
-        return f"FloatSetting('{self._name}')"
-
 
 class EnumOption(Option):
     def __init__(self, name, enum, default, lb=None, ub=None, *args, **kwargs):
