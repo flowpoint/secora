@@ -24,7 +24,6 @@ def build_embedding_space(model, data_loader, config, embedding_size=768, featur
     dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=rank)
-    model.eval()
 
     show_bar = (rank == 0 or not dist.is_initialized()) and kwargs['progress'] == True
 
@@ -101,11 +100,16 @@ def k_nearest_neighbors(
 
         #index = faiss.index_factory(embedding_size, 'SQfp16')#Flat')
         index = faiss.IndexFlatIP(embedding_size)
+        logger.debug(f'normalize v_space')
         faiss.normalize_L2(v_space)
+        logger.debug(f'train v_space')
         index.train(v_space)
+        logger.debug(f'add v_space')
         index.add(v_space)
 
+        logger.debug(f'normalize q_space')
         faiss.normalize_L2(q_space)
+        logger.debug(f'search knn with q_space, with top_k: {top_k}')
         distances, neighbors = index.search(q_space, top_k)
 
         return distances, neighbors
@@ -120,8 +124,9 @@ def validate(
         writer,
         training_progress,
         **kwargs):
-    relevant_ids = range(len(valid_loader))
 
+    model.eval()
+    relevant_ids = range(len(valid_loader))
     rank = dist.get_rank()
 
     with model.no_sync():
@@ -138,24 +143,31 @@ def validate(
                     **kwargs)
                         
 
+    logger = kwargs['logger']
     rank = dist.get_rank()
     dist.barrier()
     if rank == 0:
         neighbors_list = [list(n) for n in neighbors]
+        logger.debug('calculate mrr')
         score = float(mrr(list(relevant_ids), neighbors_list))
+        logger.debug('score finished')
     else:
+        logger.debug('score 0')
         score = float(0.)
 
     dist.barrier()
 
+    logger.debug('tens')
     tens = torch.tensor(score, requires_grad=False, device=rank, dtype=torch.float32)
     dist.broadcast(tens, src=0)
     torch.cuda.synchronize()
     dist.barrier()
+    logger.debug('tens.detach')
     s = tens.detach().to('cpu').numpy()
     dist.barrier()
 
     if rank == 0:
+        logger.debug('create embeddings')
         # show embeddings in tensorboard
         samples = []
         for b in valid_loader:
@@ -166,7 +178,9 @@ def validate(
         writer.add_embedding(code_embedding, metadata=samples, tag='code', global_step=i)
         writer.add_embedding(doc_embedding, metadata=samples, tag='doc', global_step=i)
 
+        logger.debug('log mrr')
         writer.add_scalar("mrr/validation", score, i)
+        logger.debug('log validation')
         writer.add_scalar("distances/validation", np.mean(distances), i)
         writer.flush()
 

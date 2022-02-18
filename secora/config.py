@@ -422,6 +422,11 @@ class SimpleConfig:
 
         return nconf
 
+    def overwrite(self, config_candidate):
+        for k,v in config_candidate.items():
+            config[k] = config.settings[k].parse(v)
+
+
 
 
 if __name__ == "__main__":

@@ -40,6 +40,26 @@ from SM3 import SM3
 
 TIMEOUT = datetime.timedelta(65)
 
+class FinetuneMode(Enum):
+    ALL = 'all'
+    POOLING = 'pooling'
+
+class ScheduleEnum(Enum):
+    LINEAR = 'linear'
+    CONSTANT = 'constant'
+    
+class OptimizerEnum(Enum):
+    ADAM = 'adam'
+    ADAMW = 'adamw'
+    SGD = 'sgd'
+    SM3 = 'sm3'
+
+_optimizer_mapping = {'adam': torch.optim.Adam,
+        'adamw': torch.optim.AdamW,
+        'sgd': torch.optim.SGD,
+        'sm3': SM3
+        }
+
 class RunNameSetting(Setting):
     ''' enforces a naming scheme for training runs 
     prefix = run | test | debug | profile
@@ -61,31 +81,9 @@ class RunNameSetting(Setting):
         matched = self.scheme.match(val) is not None
         return matched
 
-class FinetuneMode(Enum):
-    ALL = 'all'
-    POOLING = 'pooling'
-
-class ScheduleEnum(Enum):
-    LINEAR = 'linear'
-    CONSTANT = 'constant'
-    
-class OptimizerEnum(Enum):
-    ADAM = 'adam'
-    ADAMW = 'adamw'
-    SGD = 'sgd'
-    SM3 = 'sm3'
-
-_optimizer_mapping = {'adam': torch.optim.Adam,
-        'adamw': torch.optim.AdamW,
-        'sgd': torch.optim.SGD,
-        'sm3': SM3
-        }
-
-
 class TrainingConfig(SimpleConfig):
     def __init__(self):
         super().__init__()
-        #self.config = SimpleConfig()
 
         setts = [IntSetting('batch_size', lb=1),
             IntSetting('seed', lb=0),
@@ -124,7 +122,7 @@ def train_shard(
         state_tracker,
         train_loader,
         config,
-        writer,
+        writer=None,
         **kwargs
         ):
 
@@ -137,18 +135,17 @@ def train_shard(
     training_progress = state_tracker['training_progress']
     scaler = state_tracker['scaler']
     model = state_tracker['model']
-
     model.train()
 
-    grad_accum = kwargs['grad_accum']
     shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
 
-    if rank == 0 and kwargs['progress'] == True:
+    if rank == 0:
         bar = tqdm(
-                total=len(train_loader), 
-                unit=' batch', 
-                desc='train_shard', 
-                smoothing=0.03)
+            total=len(train_loader), 
+            unit=' batch', 
+            desc='train_shard', 
+            smoothing=0.03,
+            disable=kwargs['progress'])
 
     heartbeat = time()
 
@@ -156,26 +153,21 @@ def train_shard(
         model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
 
         biemb = model(*model_inputs)
-        emb1 = biemb[:,0]
-        emb2 = biemb[:,1]
-
-        closs = contrastive_loss(emb1, emb2, config['temp'])
-        if config['amp'] != model.AMP.OFF:
+        closs = contrastive_loss(biemb[:,0], biemb[:,1], config['temp'])
+        if config['amp'] != AMP.DISABLE:
             loss = scaler.scale(closs)
         else:
             loss = closs
 
         shard_loss.add_(loss.detach())
-
-        if rank == 0 and kwargs['progress'] == True:
-            bar.update(n=1)
+        bar.update(n=1)
 
         if rank == 0 and time() - heartbeat > 60:
             logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {step}/{len(train_loader)}")
             heartbeat = time()
 
         # only sync before optimizer step
-        if (step+1) % grad_accum != 0:
+        if (step+1) % kwargs['grad_accum']!= 0:
             logger.debug('unsynced loss.backward')
             with model.no_sync():
                 loss.backward()
@@ -183,13 +175,13 @@ def train_shard(
             loss.backward()
 
             #gradient clipping
-            if 'grad_clip' in config.settings and config['grad_clip'] != 0.:
+            if config['grad_clip'] != 0.:
                 scaler.unscale_(optim)
                 clip_grad_norm_(
                         model.parameters(), 
                         max_norm=config['grad_clip'])
 
-            if config['amp'] != model.AMP.OFF:
+            if config['amp'] != AMP.DISABLE:
                 scaler.step(optim)
                 scaler.update()
             else:
@@ -219,11 +211,8 @@ def train(config, preempt_callback=None, **kwargs):
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
         #save_config(config, path)
-        #save_config(config.to_dict(), path)
+        save_config(config.to_dict(), path)
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-
-    else:
-        writer = None
 
     logger = kwargs['logger']
     logger.info('started train function')
@@ -399,12 +388,8 @@ if __name__ == "__main__":
 
     config = TrainingConfig()
 
-    #with open(args.config_file, 'r') as f:
     with args.config_file as f:
         config_candidate = yaml.safe_load(f)
-
-    #parsed_config = {'name':args.run_name, 'batch_size': args.batch_size}
-    #config_candidate.update(parsed_config)
 
     if args.name is not None:
         config_candidate['name'] = args.name
@@ -413,6 +398,7 @@ if __name__ == "__main__":
         config_candidate['batch_size'] = args.batch_size
 
     for k,v in config_candidate.items():
+        # parse through the settings parsing function
         config[k] = config.settings[k].parse(v)
 
     config.check()
