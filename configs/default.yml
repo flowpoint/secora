@@ -1,9 +1,9 @@
 logdir: "./output"
 checkpoint_dir: "./output"
 
-name: 'debug_train_0_0'
+name: 'run_train_t0_utc1645359851'
 seed: 42
-max_checkpoints: 3
+max_checkpoints: 10
 
 num_gpus: 1 #'auto'
 amp: default

@@ -32,13 +32,6 @@ class LanguageSetting(Setting):
     def check(self, val_list):
         return all([x in LANGUAGES for x in val_list])
 
-
-def preproc_valid(sample):
-    # delete docstring from code samples
-    #return {'func_code_string': sample['func_code_string'].replace(sample['func_documentation_string'], '')}
-    return {'func_code_string': " ".join(sample['func_code_tokens'])}
-
-
 def fair_truncate_old(doc, code, max_length):
     ''' truncates two strings fairly '''
     dlen = len(doc)
@@ -118,24 +111,26 @@ def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
     return proc_batch
 
 
-def tokenize_valid_sample(tokenizer, batch, max_input_tokens):
-    code = batch['func_code_string']
-    doc = [x + tokenizer.sep_token for x in batch['func_documentation_string']]
+def tokenize_valid_sample(tokenizer, sample, max_input_tokens):
+    #code = batch['func_code_string']
+    #doc = [x + tokenizer.sep_token for x in batch['func_documentation_string']]
+    doc = " ".join(sample['func_documentation_tokens'])
+    code = " ".join(sample['func_code_tokens']) + tokenizer.sep_token
 
     # call tokenizer twice instead of on a pair, so that its impossible to leak data between code and doc
     # instead of the joint tokenization
     tokenized_code = tokenizer(code, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
     tokenized_doc = tokenizer(doc, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
 
-    proc_batch = dict()
+    proc_sample = dict()
 
     for k, v in tokenized_code.items():
-        proc_batch['code_'+k] = v
+        proc_sample['code_'+k] = v
 
     for k, v in tokenized_doc.items():
-        proc_batch['doc_'+k] = v
+        proc_sample['doc_'+k] = v
 
-    return proc_batch
+    return proc_sample
 
 class DataSplit(Enum):
     TRAIN = 'train'
@@ -162,23 +157,20 @@ def preprocess_split(split, config, limit_samples=None, **kwargs):
             raise RuntimeError('invalid limit_samples')
         dataset = dataset.select(range(limit_samples))
 
-    if config['languages'] != 'all':
+    if config['languages'] != ['all']:
         dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=num_proc)
-
-    if split != DataSplit.TRAIN:
-        dataset = dataset.map(preproc_valid, batched=False, num_proc=num_proc)
 
     dataset = dataset.rename_column("func_code_url", "url")
 
     if split == DataSplit.TRAIN:
-        def tokenize_fn(x): return tokenize_train_sample(tokenizer, x, config)
+        def tokenize_fn(x): return tokenize_train_sample(tokenizer, x, config['preprocess_mode'], config['max_input_tokens'])
     else:
         def tokenize_fn(x): return tokenize_valid_sample(tokenizer, x, config['max_input_tokens'])
 
     dataset = dataset.map(
             tokenize_fn,
             remove_columns=set(dataset.column_names) - {'url', 'language'},
-            batched=True,
+            batched=False,
             num_proc=num_proc)
 
     # cast dataset to torch tensors

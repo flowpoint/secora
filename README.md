@@ -30,7 +30,7 @@ pytest tests
 ## run in container
 ```
 sudo ./environments/container/run.sh
-python secora/train.py configs/default.yml --name run_py768_0 --progress
+python -m secora.train configs/default.yml --name run_py768_0 --progress
 ```
 
 # Goals

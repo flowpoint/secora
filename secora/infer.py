@@ -11,11 +11,11 @@ import torch.distributed as dist
 
 from tqdm import tqdm
 
-from losses import mrr
-from data import deviceloader
+from .losses import mrr
+from .data import deviceloader
 
 
-def build_embedding_space(model, data_loader, config, embedding_size=768, feature_prefix='', device='cpu', **kwargs):
+def build_embedding_space(model, data_loader, config, embedding_size, feature_prefix='', device='cpu', **kwargs):
     embedding_size = model.embedding_size
 
     rank = device#dist.get_rank()

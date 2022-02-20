@@ -27,14 +27,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
 
-from model import *
+from .model import *
 
-from data import *
-import data
-from config import *
-from infer import build_embedding_space, k_nearest_neighbors, validate
-from losses import contrastive_loss, mrr
-from tracking import *
+from .data import *
+from . import data
+from .config import *
+from .infer import build_embedding_space, k_nearest_neighbors, validate
+from .losses import contrastive_loss, mrr
+from .tracking import *
 
 from SM3 import SM3
 
@@ -148,7 +148,7 @@ def train_shard(
             unit=' batch', 
             desc='train_shard', 
             smoothing=0.03,
-            disable=kwargs['progress'])
+            disable=not kwargs['progress'])
 
     heartbeat = time()
 
@@ -232,9 +232,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     logger.info('building model')
     if config['num_gpus'] > 0:
-        m = BiEmbeddingModelCuda(config['model_name'], 768, config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModelCuda(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
     else:
-        m = BiEmbeddingModel(config['model_name'], 768, config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
@@ -281,7 +281,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     training_progress = TrainingProgress()
     state_tracker = StateTracker(
-            config,
+            config['name'],
+            config['logdir'],
+            config['max_checkpoints'],
             logger,
             model=model,
             optimizer=optim,
@@ -393,7 +395,7 @@ if __name__ == "__main__":
     with args.config_file as f:
         config_candidate = yaml.safe_load(f)
 
-    timestamp = str(ceil(time.time()))
+    timestamp = str(ceil(time()))
     if args.name is not None:
         if args.debug == True:
             prefix = 'debug'
