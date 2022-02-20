@@ -6,6 +6,7 @@ import logging
 
 import torch
 import torch.distributed as dist
+import torch.multiprocessing as mp
 
 
 def make_logger(config, debug=False, rank=-1):
@@ -43,26 +44,20 @@ def make_logger(config, debug=False, rank=-1):
 
 
 class StateTracker:
-    def __init__(self, config, logger, **kwargs):
-        self.config = config
-
-        if 'checkpoint_dir' not in config.settings.keys():
-            raise RuntimeError('config needs to have a checkpoint_dir')
-        if 'max_checkpoints' not in config.settings.keys():
-            raise RuntimeError('config needs to have a max_checkpoints')
-        if not config['max_checkpoints'] >= 0:
+    def __init__(self, name, logdir, max_checkpoints, logger, **kwargs):
+        if not max_checkpoints >= 0:
             raise RuntimeError('max_checkpoints has to be positive')
 
-        self.checkpoint_dir = os.path.join(config['checkpoint_dir'], config['name'])
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        self.max_checkpoints = self.config['max_checkpoints']
+        self.run_logdir = os.path.join(logdir, name)
+        os.makedirs(self.run_logdir, exist_ok=True)
+        self.max_checkpoints = max_checkpoints
 
         self.logger = logger
 
         if self.max_checkpoints == 0:
             self.logger.warning("max_checkpoints is 0, no checkpoints will be saved")
         if self.max_checkpoints < 0:
-            raise ValueError('invalid value for max_checkpoings in config')
+            raise ValueError('invalid value for max_checkpoints')
 
         for k, o in kwargs.items():
             if "state_dict" not in dir(o):
@@ -76,7 +71,7 @@ class StateTracker:
         return self.objects[i]
 
     def _list_checkpoints(self):
-        return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.checkpoint_dir)))
+        return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.run_logdir)))
 
     def save(self):
         if self.max_checkpoints == 0:
@@ -84,7 +79,7 @@ class StateTracker:
             return 
 
         timestamp = ceil(time())
-        path = os.path.join(self.checkpoint_dir, "checkpoint_" + str(timestamp) + ".pt")
+        path = os.path.join(self.run_logdir, "checkpoint_" + str(timestamp) + ".pt")
         state = [o.state_dict() for o in self.objects.values()]
 
         self.logger.info(f'saving state to {path}')
@@ -94,7 +89,7 @@ class StateTracker:
         checkpoints = self._list_checkpoints()
 
         if len(checkpoints) > self.max_checkpoints:
-            old_path = os.path.join(self.checkpoint_dir, sorted(checkpoints)[0])
+            old_path = os.path.join(self.run_logdir, sorted(checkpoints)[0])
             self.logger.info(f'removing old checkpoint: {old_path}')
             os.remove(old_path)
 
@@ -106,10 +101,10 @@ class StateTracker:
             self.logger.info('no checkpoints available, not loading anything')
             return 
 
-        self.logger.info(f'found checkpoints in {self.checkpoint_dir}: {existing_checkpoints}')
+        self.logger.info(f'found checkpoints in {self.run_logdir}: {existing_checkpoints}')
 
         checkpoint = existing_checkpoints[-1]
-        path = os.path.join(self.checkpoint_dir, checkpoint)
+        path = os.path.join(self.run_logdir, checkpoint)
 
         self.logger.info(f'restoring: {path}')
 

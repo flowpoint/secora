@@ -210,7 +210,6 @@ def train(config, preempt_callback=None, **kwargs):
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        #save_config(config, path)
         save_config(config.to_dict(), path)
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
@@ -219,11 +218,11 @@ def train(config, preempt_callback=None, **kwargs):
 
     if kwargs['debug'] == True:
         limit = 10*config['grad_accum']*config['batch_size']
-        train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=limit, **kwargs)
-        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
     else:
-        train_set = preprocess_split(data.DataSplit.TRAIN, config, **kwargs)
-        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, **kwargs)
+        limit = None
+
+    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=limit, **kwargs)
+    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
 
     # both sets arent shuffled, shuffle train set every epoch manually
     train_loader = get_loader(train_set, config, **kwargs)
@@ -231,9 +230,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     logger.info('building model')
     if config['num_gpus'] > 0:
-        m = BiEmbeddingModelCuda(config['model_name'], 768, AMP.FP16, hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModelCuda(config['model_name'], 768, config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
     else:
-        m = BiEmbeddingModel(config['model_name'], 768, AMP.FP16, hidden_dropout_prob=config['dropout']).to(rank)
+        m = BiEmbeddingModel(config['model_name'], 768, config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
@@ -288,28 +287,22 @@ def train(config, preempt_callback=None, **kwargs):
             scaler=scaler,
             training_progress=training_progress)
 
-    # load latest checkpoint 
-    torch.cuda.synchronize()
-    dist.barrier()
-    state_tracker.load_latest()
-
     if kwargs['debug'] == True:
         num_epochs = 2
         num_shards = 2
-        training_progress.epoch = 0
-        training_progress.shard = 0
         grad_accum = 1
-        #config['grad_accum'] = 1
     else:
+        # load latest checkpoint 
+        torch.cuda.synchronize()
+        dist.barrier()
+        state_tracker.load_latest()
+
         num_epochs = config['epochs']
         num_shards = config['shards']
         grad_accum = config['grad_accum']
 
-    shard_size = len(train_set)/num_shards
-    val_size = len(valid_set)
-
-    logger.info(f'shard_size: {shard_size} samples')
-    logger.info(f'validation set size: {val_size} samples')
+    logger.info(f'shard_size: {len(train_set)/num_shards} samples')
+    logger.info(f'validation set size: {len(valid_set)} samples')
 
     rank = dist.get_rank()
 
@@ -375,6 +368,13 @@ def training_worker(rank, config, progress, debug):
     dist.destroy_process_group()
 
 
+def clean_init():
+    torch.cuda.empty_cache()
+    np.random.seed(config['seed'])
+    torch.cuda.manual_seed_all(config['seed'])
+    torch.use_deterministic_algorithms(True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual training script.')
     parser.add_argument('config_file', type=argparse.FileType('r'))
@@ -409,11 +409,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    np.random.seed(config['seed'])
-    torch.cuda.manual_seed_all(config['seed'])
-    torch.cuda.empty_cache()
-
-    torch.use_deterministic_algorithms(True)
+    clean_init()
     torch.backends.cudnn.benchmark = True
 
     mp.set_start_method('spawn')

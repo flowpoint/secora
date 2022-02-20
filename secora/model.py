@@ -7,7 +7,7 @@ from tokenizers import Tokenizer
 
 from torch.cuda.amp import autocast
 from enum import Enum, auto
-from config import *
+from .config import *
 
 from collections import OrderedDict
 '''
@@ -114,7 +114,10 @@ class BiEmbeddingModelCuda(torch.nn.Module):
         torch.cuda.synchronize()
 
     def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
-        tp = {'dtype': _precision_map[self.amp.value]}
+        if self.amp in [AMP.DISABLE, AMP.DEFAULT]:
+            tp = {}
+        else:
+            tp = {'dtype': _precision_map[self.amp.value]}
         with autocast(enabled=(self.amp != AMP.DISABLE), **tp):
             return self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
 

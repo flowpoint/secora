@@ -27,6 +27,12 @@ ipython secora/train.py
 pytest tests
 ```
 
+## run in container
+```
+sudo ./environments/container/run.sh
+python secora/train.py configs/default.yml --name run_py768_0 --progress
+```
+
 # Goals
 we want to apply and evaluate bert on code for information retrieval.
 

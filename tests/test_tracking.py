@@ -28,13 +28,7 @@ class TestTracker:
         model = MockModel()
         for i in [0,1,10]:
             with tempfile.TemporaryDirectory() as tmpdirname:
-                config = {
-                    "max_checkpoints": i,
-                    'checkpoint_dir': tmpdirname,
-                    'name': 'model'
-                    }
-
-                tracker = StateTracker(config, model=model, logger=self.logger)
+                tracker = StateTracker(name='model', logdir=tmpdirname, max_checkpoints=i, model=model, logger=self.logger)
 
                 path = os.path.join(tmpdirname, 'model')
 
@@ -51,13 +45,7 @@ class TestTracker:
     def test_restore(self):
         model = MockModel()
         with tempfile.TemporaryDirectory() as tmpdirname:
-            config = {
-                "max_checkpoints": 1,
-                'checkpoint_dir': tmpdirname,
-                'name': 'model'
-                }
-
-            tracker = StateTracker(config, model=model, logger=self.logger)
+            tracker = StateTracker(name='model', logdir=tmpdirname, max_checkpoints=1, model=model, logger=self.logger)
             
             path = os.path.join(tmpdirname, 'model')
             assert os.listdir(path) == []
@@ -66,7 +54,7 @@ class TestTracker:
             tracker.save()
 
             model2 = MockModel()
-            tracker2 = StateTracker(config, model=model2, logger=self.logger)
+            tracker2 = StateTracker(name='model', logdir=tmpdirname, max_checkpoints=1, model=model2, logger=self.logger)
             tracker2.load_latest()
             assert model2.state == model.state
             assert tracker['model'].state == model.state

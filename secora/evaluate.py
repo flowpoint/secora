@@ -38,19 +38,17 @@ def export_predictions(preds, queries):
 
 def get_model(checkpoint_path, config, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], Precision.FP16).to(device)
+    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], AMP.FP16).to(device)
     #model = EmbeddingModel(BaseModel.CODEBERT, config['embedding_size']).to(device)
     st2 = OrderedDict()
-
-    print(st.keys())
 
     for k in st.keys():
         v = st[k]
         #st2[k.removeprefix('module.')] = v
-        st2[k.replace('module.', '', 1)] = v
+        st2[k.replace('module.m.', '', 1)] = v
         
-    st2['m.pooling.weight'] = torch.zeros([768,768])
-    st2['m.pooling.bias'] = torch.zeros([768])
+    #st2['m.pooling.weight'] = torch.zeros([768,768])
+    #st2['m.pooling.bias'] = torch.zeros([768])
     #st2.pop('m.pooling.bias')
 
     model.m.load_state_dict(st2)
@@ -138,7 +136,6 @@ if __name__ == '__main__':
     #config['languages'] = ['all']
     config['languages'] = ['python']
     config['model_name'] = BaseModel.CODEBERT
-    config['languages'] = data.LanguageEnum.PYTHON
 
     model = get_model(checkpoint_path, config, device)
 

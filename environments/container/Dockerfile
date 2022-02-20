@@ -34,6 +34,6 @@ RUN apt update && apt-get install -y \
 #RUN cmake -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=ON -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF -B build .
 
 RUN pip install faiss-cpu
-RUN pip install pipenv pytest tensorboard datasets ipython transformers docopt optuna torch-SM3
+RUN pip install pipenv pytest tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools
 
 WORKDIR /root/secora

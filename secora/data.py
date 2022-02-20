@@ -116,7 +116,7 @@ class DataSplit(Enum):
     TEST = 'test'
     EVAL = 'eval'
 
-def preprocess_split(split, config, limit_samples=-1, **kwargs):
+def preprocess_split(split, config, limit_samples=None, **kwargs):
     if not isinstance(split, DataSplit):
         raise RuntimeError(f"invalid dataset split: {split}")
 
@@ -130,7 +130,9 @@ def preprocess_split(split, config, limit_samples=-1, **kwargs):
     else:
         dataset = load_dataset("code_search_net")[split.value]
 
-    if limit_samples >= 1:
+    if limit_samples is not None:
+        if limit_samples < 1:
+            raise RuntimeError('invalid limit_samples')
         dataset = dataset.select(range(limit_samples))
 
     if config['languages'] != 'all':

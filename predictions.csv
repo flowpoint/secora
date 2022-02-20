@@ -1,0 +1,496 @@
+query,language,url
+convert int to string,python,https://github.com/gtaylor/django-athumb/blob/69261ace0dff81e33156a54440874456a7b38dfb/athumb/pial/helpers.py#L6-L12
+convert int to string,python,https://github.com/apache/spark/blob/618d6bff71073c8c93501ab7392c3cc579730f0b/python/pyspark/ml/param/__init__.py#L202-L213
+convert int to string,python,https://github.com/rapidpro/expressions/blob/b03d91ec58fc328960bce90ecb5fa49dcf467627/python/temba_expressions/conversions.py#L72-L91
+convert int to string,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+convert int to string,python,https://github.com/kevinconway/confpy/blob/1ee8afcab46ac6915a5ff4184180434ac7b84a60/confpy/options/stropt.py#L19-L32
+priority queue,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+priority queue,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+priority queue,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+priority queue,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+priority queue,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+string to date,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+string to date,python,https://github.com/spotify/luigi/blob/c5eca1c3c3ee2a7eb612486192a0da146710a1e9/luigi/parameter.py#L379-L385
+string to date,python,https://github.com/amaas-fintech/amaas-core-sdk-python/blob/347b71f8e776b2dde582b015e31b4802d91e8040/amaascore/transactions/transaction.py#L154-L161
+string to date,python,https://github.com/caktus/django-timepiece/blob/52515dec027664890efbc535429e1ba1ee152f40/timepiece/utils/__init__.py#L100-L102
+string to date,python,https://github.com/eventable/vobject/blob/498555a553155ea9b26aace93332ae79365ecb31/docs/build/lib/vobject/icalendar.py#L781-L791
+sort string list,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+sort string list,python,https://github.com/ajenhl/tacl/blob/b8a343248e77f1c07a5a4ac133a9ad6e0b4781c2/tacl/data_store.py#L718-L730
+sort string list,python,https://github.com/datastore/datastore/blob/7ccf0cd4748001d3dbf5e6dda369b0f63e0269d3/datastore/core/query.py#L281-L283
+sort string list,python,https://github.com/jahuth/litus/blob/712b016ea2dbb1cf0a30bfdbb0a136945a7b7c5e/__init__.py#L351-L355
+sort string list,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+save list to file,python,https://github.com/skorch-dev/skorch/blob/5b9b8b7b7712cb6e5aaa759d9608ea6269d5bcd3/skorch/history.py#L181-L192
+save list to file,python,https://github.com/lorien/grab/blob/8b301db2a08c830245b61c589e58af6234f4db79/grab/script/crawl.py#L57-L69
+save list to file,python,https://github.com/genialis/resolwe-runtime-utils/blob/5657d7cf981972a5259b9b475eae220479401001/resolwe_runtime_utils.py#L62-L70
+save list to file,python,https://github.com/sailthru/sailthru-python-client/blob/22aa39ba0c5bddd7b8743e24ada331128c0f4f54/sailthru/sailthru_client.py#L356-L365
+save list to file,python,https://github.com/Josef-Friedrich/phrydy/blob/aa13755155977b4776e49f79984f9968ac1d74dc/phrydy/mediafile.py#L588-L592
+postgresql connection,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+postgresql connection,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+postgresql connection,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+postgresql connection,python,https://github.com/KrzyHonk/bpmn-python/blob/6e5e28e3d656dbf5bd3d85d78fe8e3f2fb462629/bpmn_python/bpmn_diagram_visualizer.py#L70-L94
+postgresql connection,python,https://github.com/saltstack/salt/blob/e8541fd6e744ab0df786c0f76102e41631f45d46/salt/pillar/postgres.py#L85-L102
+confusion matrix,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+confusion matrix,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+confusion matrix,python,https://github.com/GoogleCloudPlatform/httplib2shim/blob/e034530c551f11cf5690ef78a24c66087976c310/httplib2shim/__init__.py#L227-L253
+confusion matrix,python,https://github.com/amperser/proselint/blob/cb619ee4023cc7856f5fb96aec2a33a2c9f1a2e2/app.py#L34-L58
+confusion matrix,python,https://github.com/rigetti/grove/blob/dc6bf6ec63e8c435fe52b1e00f707d5ce4cdb9b3/grove/amplification/amplification.py#L86-L118
+set working directory,python,https://github.com/cqparts/cqparts/blob/018e87e14c2c4d1d40b4bfe6a7e22bcf9baf0a53/src/cqparts/utils/misc.py#L62-L83
+set working directory,python,https://github.com/spyder-ide/spyder/blob/f76836ce1b924bcc4efd3f74f2960d26a4e528e0/spyder/plugins/ipythonconsole/plugin.py#L577-L583
+set working directory,python,https://github.com/SwissDataScienceCenter/renku-python/blob/691644d695b055a01e0ca22b2620e55bbd928c0d/renku/cli/init.py#L87-L91
+set working directory,python,https://github.com/rootpy/rootpy/blob/3926935e1f2100d8ba68070c2ab44055d4800f73/rootpy/context.py#L181-L191
+set working directory,python,https://github.com/crs4/pydoop/blob/f375be2a06f9c67eaae3ce6f605195dbca143b2b/pydoop/hdfs/fs.py#L461-L471
+group by count,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+group by count,python,https://github.com/rflamary/POT/blob/c5108efc7b6702e1af3928bef1032e6b37734d1c/ot/bregman.py#L974-L976
+group by count,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+group by count,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+group by count,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+binomial distribution,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+binomial distribution,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+binomial distribution,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+binomial distribution,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+binomial distribution,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+aes encryption,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+aes encryption,python,https://github.com/amperser/proselint/blob/cb619ee4023cc7856f5fb96aec2a33a2c9f1a2e2/app.py#L34-L58
+aes encryption,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+aes encryption,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+aes encryption,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+linear regression,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+linear regression,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+linear regression,python,https://github.com/ArchiveTeam/wpull/blob/ddf051aa3322479325ba20aa778cb2cb97606bf5/wpull/application/tasks/log.py#L18-L64
+linear regression,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+linear regression,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+socket recv timeout,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+socket recv timeout,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+socket recv timeout,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+socket recv timeout,python,https://github.com/GoogleCloudPlatform/httplib2shim/blob/e034530c551f11cf5690ef78a24c66087976c310/httplib2shim/__init__.py#L227-L253
+socket recv timeout,python,https://github.com/draperjames/qtpandas/blob/64294fb69f1839e53dee5ea453337266bfaf24f4/qtpandas/views/MultiFileDialogs.py#L61-L71
+write csv,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+write csv,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+write csv,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+write csv,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+write csv,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+convert decimal to hex,python,https://github.com/theolind/pymysensors/blob/a139ab6e2f6b71ebaf37282f69bfd0f7fe6193b6/mysensors/const_15.py#L261-L268
+convert decimal to hex,python,https://github.com/tanghaibao/jcvi/blob/d2e31a77b6ade7f41f3b321febc2b4744d1cdeca/jcvi/utils/webcolors.py#L356-L396
+convert decimal to hex,python,https://github.com/EnigmaBridge/client.py/blob/0fafe3902da394da88e9f960751d695ca65bbabd/ebclient/crypto_util.py#L86-L99
+convert decimal to hex,python,https://github.com/markperdue/pyvesync/blob/7552dd1a6dd5ebc452acf78e33fd8f6e721e8cfc/src/pyvesync/helpers.py#L122-L127
+convert decimal to hex,python,https://github.com/gnullByte/dotcolors/blob/4b09ff9862b88b3125fe9cd86aa054694ed3e46e/dotcolors/utils.py#L55-L63
+export to excel,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+export to excel,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+export to excel,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+export to excel,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+export to excel,python,https://github.com/eleme/ruskit/blob/2e8c5a3f6a65b8aeb07012b4e2c8ba324d887c3b/ruskit/cmds/manage.py#L107-L113
+scatter plot,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+scatter plot,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+scatter plot,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+scatter plot,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+scatter plot,python,https://github.com/rflamary/POT/blob/c5108efc7b6702e1af3928bef1032e6b37734d1c/ot/bregman.py#L974-L976
+convert json to csv,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+convert json to csv,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+convert json to csv,python,https://github.com/gtaylor/django-athumb/blob/69261ace0dff81e33156a54440874456a7b38dfb/athumb/pial/helpers.py#L6-L12
+convert json to csv,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+convert json to csv,python,https://github.com/intuition-io/intuition/blob/cd517e6b3b315a743eb4d0d0dc294e264ab913ce/intuition/data/ystockquote.py#L37-L130
+pretty print json,python,https://github.com/peterservice-rnd/robotframework-jsonvalidator/blob/acde5045c04d0a7b9079f22707c3e71a5d3fa724/src/JsonValidator.py#L414-L447
+pretty print json,python,https://github.com/chovanecm/sacredboard/blob/47e1c99e3be3c1b099d3772bc077f5666020eb0b/sacredboard/app/config/jinja_filters.py#L60-L62
+pretty print json,python,https://github.com/thingful/hypercat-py/blob/db24ef66ec92d74fbea90afbeadc3a268f18f6e3/hypercat/hypercat.py#L90-L92
+pretty print json,python,https://github.com/MisterY/gnucash-portfolio/blob/bfaad8345a5479d1cd111acee1939e25c2a638c2/gnucash_portfolio/lib/settings.py#L95-L97
+pretty print json,python,https://github.com/josuebrunel/myql/blob/891bad29cc83a81b3f5ebc4d0401d6f2c22f119e/myql/utils.py#L5-L9
+replace in file,python,https://github.com/pantsbuild/pants/blob/b72e650da0df685824ffdcc71988b8c282d0962d/src/python/pants/engine/native.py#L183-L194
+replace in file,python,https://github.com/uktrade/directory-components/blob/305b3cfd590e170255503ae3c41aebcaa658af8e/scripts/upgrade_header_footer.py#L70-L79
+replace in file,python,https://github.com/fabric/fabric/blob/e9939d68b734935f0c98d98817912ad7c698238f/fabric/transfer.py#L41-L145
+replace in file,python,https://github.com/CI-WATER/gsshapy/blob/00fd4af0fd65f1614d75a52fe950a04fb0867f4c/gsshapy/modeling/framework.py#L29-L37
+replace in file,python,https://github.com/pypyr/pypyr-cli/blob/4003f999cd5eb030b4c7407317de728f5115a80f/pypyr/steps/filereplace.py#L9-L56
+k means clustering,python,https://github.com/markchil/gptools/blob/225db52bfe6baef1516529ad22177aa2cf7b71e4/gptools/kernel/rational_quadratic.py#L74-L88
+k means clustering,python,https://github.com/apache/incubator-mxnet/blob/1af29e9c060a4c7d60eeaacba32afdb9a7775ba7/example/gluon/sn_gan/model.py#L89-L117
+k means clustering,python,https://github.com/revelc/pyaccumulo/blob/8adcf535bb82ba69c749efce785c9efc487e85de/pyaccumulo/proxy/AccumuloProxy.py#L2953-L2960
+k means clustering,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+k means clustering,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+connect to sql,python,https://github.com/kensho-technologies/graphql-compiler/blob/f6079c6d10f64932f6b3af309b79bcea2123ca8f/graphql_compiler/tool.py#L12-L16
+connect to sql,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+connect to sql,python,https://github.com/theolind/pymysensors/blob/a139ab6e2f6b71ebaf37282f69bfd0f7fe6193b6/mysensors/__init__.py#L228-L231
+connect to sql,python,https://github.com/uber-common/opentracing-python-instrumentation/blob/57b29fb9f647e073cde8c75155f4708cb5661d20/opentracing_instrumentation/client_hooks/__init__.py#L33-L55
+connect to sql,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+html encode string,python,https://github.com/prajwalkr/track-it/blob/01a91dba8e7bc169976e0b13faacf7dd7330237b/trackit/trackers.py#L385-L419
+html encode string,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+html encode string,python,https://github.com/cloudnull/cloudlib/blob/5038111ce02521caa2558117e3bae9e1e806d315/cloudlib/http.py#L58-L67
+html encode string,python,https://github.com/GoogleCloudPlatform/httplib2shim/blob/e034530c551f11cf5690ef78a24c66087976c310/httplib2shim/__init__.py#L227-L253
+html encode string,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+finding time elapsed using a timer,python,https://github.com/Robpol86/etaprogress/blob/224e8a248c2bf820bad218763281914ad3983fff/etaprogress/eta.py#L83-L87
+finding time elapsed using a timer,python,https://github.com/GPflow/GPflow/blob/549394f0b1b0696c7b521a065e49bdae6e7acf27/gpflow/actions.py#L56-L63
+finding time elapsed using a timer,python,https://github.com/bwohlberg/sporco/blob/8946a04331106f4e39904fbdf2dc7351900baa04/sporco/util.py#L1438-L1456
+finding time elapsed using a timer,python,https://github.com/sernst/cauldron/blob/4086aec9c038c402ea212c79fe8bd0d27104f9cf/cauldron/session/projects/steps.py#L97-L107
+finding time elapsed using a timer,python,https://github.com/lobocv/anonymoususage/blob/847bdad0746ad1cc6c57fb9def201beb59fb8300/anonymoususage/tables/timer.py#L58-L66
+parse binary file to custom class,python,https://github.com/pulumi/pulumi/blob/95d51efe6ab9a533838b6d83aa240b5f912e72aa/sdk/python/lib/pulumi/runtime/known_types.py#L154-L162
+parse binary file to custom class,python,https://github.com/cloudtools/troposphere/blob/f7ea5591a7c287a843adc9c184d2f56064cfc632/troposphere/template_generator.py#L143-L198
+parse binary file to custom class,python,https://github.com/bunq/sdk_python/blob/da6c9b83e6d83ee8062617f53c6eb7293c0d863d/bunq/sdk/json/converter.py#L641-L651
+parse binary file to custom class,python,https://github.com/rosenbrockc/fortpy/blob/1ed0757c52d549e41d9d44bdea68cb89529293a5/fortpy/elements.py#L507-L519
+parse binary file to custom class,python,https://github.com/willseward/django-custom-field/blob/d42a620a53a69e53902ece77bfbdad27485f3ef1/custom_field/custom_field.py#L21-L24
+get current ip address,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+get current ip address,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+get current ip address,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+get current ip address,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+get current ip address,python,https://github.com/TheHive-Project/Cortex-Analyzers/blob/8dae6a8c4cf9af5554ae8c844985c4b44d4bd4bf/analyzers/MaxMind/ipaddr.py#L1609-L1631
+convert int to bool,python,https://github.com/theislab/scanpy/blob/9e4e5ee02e04cf618872d9b098e24f0542e8b227/scanpy/readwrite.py#L591-L599
+convert int to bool,python,https://github.com/rapidpro/expressions/blob/b03d91ec58fc328960bce90ecb5fa49dcf467627/python/temba_expressions/conversions.py#L7-L26
+convert int to bool,python,https://github.com/playpauseandstop/rororo/blob/28a04e8028c29647941e727116335e9d6fd64c27/rororo/utils.py#L17-L32
+convert int to bool,python,https://github.com/fboender/ansible-cmdb/blob/ebd960ac10684e8c9ec2b12751bba2c4c9504ab7/src/ansiblecmdb/util.py#L64-L85
+convert int to bool,python,https://github.com/Chilipp/psyplot/blob/75a0a15a9a1dd018e79d2df270d56c4bf5f311d5/psyplot/config/rcsetup.py#L1020-L1029
+read text file line by line,python,https://github.com/edeposit/edeposit.amqp.ftp/blob/fcdcbffb6e5d194e1bb4f85f0b8eaa9dbb08aa71/src/edeposit/amqp/ftp/monitor.py#L36-L48
+read text file line by line,python,https://github.com/jorgenschaefer/elpy/blob/ffd982f829b11e53f2be187c7b770423341f29bc/elpy/rpc.py#L59-L68
+read text file line by line,python,https://github.com/DataBiosphere/toil/blob/a8252277ff814e7bee0971139c2344f88e44b644/attic/toil-sort-example.py#L93-L104
+read text file line by line,python,https://github.com/lehins/django-smartfields/blob/23d4b0b18352f4f40ce8c429735e673ba5191502/smartfields/utils.py#L224-L227
+read text file line by line,python,https://github.com/geomet/geomet/blob/b82d7118113ab723751eba3de5df98c368423c2b/geomet/tool.py#L83-L116
+get executable path,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+get executable path,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+get executable path,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+get executable path,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+get executable path,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+httpclient post json,python,https://github.com/moluwole/Bast/blob/eecf55ae72e6f24af7c101549be0422cd2c1c95a/bast/controller.py#L182-L187
+httpclient post json,python,https://github.com/zetaops/zengine/blob/b5bc32d3b37bca799f8985be916f04528ac79e4a/zengine/middlewares.py#L52-L66
+httpclient post json,python,https://github.com/transifex/transifex-python-library/blob/9fea86b718973de35ccca6d54bd1f445c9632406/txlib/http/http_requests.py#L141-L154
+httpclient post json,python,https://github.com/ThreatConnect-Inc/tcex/blob/dd4d7a1ef723af1561687120191886b9a2fd4b47/tcex/tcex_request.py#L77-L81
+httpclient post json,python,https://github.com/nyrkovalex/httpsrv/blob/0acc3298be56856f73bda1ed10c9ab5153894b01/httpsrv/httpsrv.py#L119-L136
+get inner html,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+get inner html,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+get inner html,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+get inner html,python,https://github.com/dailymuse/oz/blob/4329f6a207dc9d2a8fbeb4d16d415dbe4570b5bd/oz/core/actions.py#L65-L141
+get inner html,python,https://github.com/kata198/AdvancedHTMLParser/blob/06aeea5d8e2ea86e155aae0fc237623d3e9b7f9d/AdvancedHTMLParser/Parser.py#L839-L847
+convert string to number,python,https://github.com/consbio/ncdjango/blob/f807bfd1e4083ab29fbc3c4d4418be108383a710/ncdjango/api.py#L46-L50
+convert string to number,python,https://github.com/saltstack/salt/blob/e8541fd6e744ab0df786c0f76102e41631f45d46/salt/modules/status.py#L59-L71
+convert string to number,python,https://github.com/pearu/pyvtk/blob/b004ec3c03299a2d75338a4be93dd29f076b70ab/pyvtk/common.py#L34-L36
+convert string to number,python,https://github.com/gtaylor/django-athumb/blob/69261ace0dff81e33156a54440874456a7b38dfb/athumb/pial/helpers.py#L6-L12
+convert string to number,python,https://github.com/ranaroussi/qtpylib/blob/0dbbc465fafd9cb9b0f4d10e1e07fae4e15032dd/qtpylib/tools.py#L89-L98
+format date,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+format date,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+format date,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+format date,python,https://github.com/desbma/sacad/blob/a7a010c4d9618a0c90927f1acb530101ca05fac4/sacad/tqdm_logging.py#L21-L39
+format date,python,https://github.com/inveniosoftware/invenio-files-rest/blob/59a950da61cc8d5882a03c6fde6db2e2ed10befd/invenio_files_rest/alembic/2e97565eba72_create_files_rest_tables.py#L217-L226
+readonly array,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+readonly array,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+readonly array,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+readonly array,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+readonly array,python,https://github.com/intuition-io/intuition/blob/cd517e6b3b315a743eb4d0d0dc294e264ab913ce/intuition/data/ystockquote.py#L37-L130
+filter array,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+filter array,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+filter array,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+filter array,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+filter array,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+map to json,python,https://github.com/chovanecm/sacredboard/blob/47e1c99e3be3c1b099d3772bc077f5666020eb0b/sacredboard/app/config/jinja_filters.py#L60-L62
+map to json,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+map to json,python,https://github.com/ClericPy/torequests/blob/1793261688d7a47e1c3a0830d83f8552f5e3e5d9/torequests/crawlers.py#L382-L384
+map to json,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+map to json,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+parse json file,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+parse json file,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+parse json file,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+parse json file,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+parse json file,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+get current observable value,python,https://github.com/apache/incubator-mxnet/blob/1af29e9c060a4c7d60eeaacba32afdb9a7775ba7/example/gluon/sn_gan/model.py#L89-L117
+get current observable value,python,https://github.com/intuition-io/intuition/blob/cd517e6b3b315a743eb4d0d0dc294e264ab913ce/intuition/data/ystockquote.py#L37-L130
+get current observable value,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+get current observable value,python,https://github.com/ARMmbed/icetea/blob/b2b97ac607429830cf7d62dae2e3903692c7c778/icetea_lib/LogManager.py#L349-L379
+get current observable value,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+get name of enumerated value,python,https://github.com/shaypal5/strct/blob/f3a301692d052ddb79331230b3c00625db1d83fc/strct/dicts/_dict.py#L850-L874
+get name of enumerated value,python,https://github.com/shaypal5/strct/blob/f3a301692d052ddb79331230b3c00625db1d83fc/strct/dicts/_dict.py#L877-L901
+get name of enumerated value,python,https://github.com/stevearc/dql/blob/e9d3aa22873076dae5ebd02e35318aa996b1e56a/dql/cli.py#L133-L139
+get name of enumerated value,python,https://github.com/pybel/pybel/blob/c8a7a1bdae4c475fa2a8c77f3a9a5f6d79556ca0/src/pybel/parser/parse_identifier.py#L74-L76
+get name of enumerated value,python,https://github.com/apple/turicreate/blob/74514c3f99e25b46f22c6e02977fe3da69221c2e/src/external/coremltools_wrap/coremltools/deps/protobuf/python/google/protobuf/descriptor.py#L321-L337
+encode url,python,https://github.com/mottosso/be/blob/0f3d4f3597c71223f616d78c6d9b2c8dffcd8a71/be/vendor/requests/packages/urllib3/request.py#L74-L81
+encode url,python,https://github.com/core/uricore/blob/dc5ef4be7bd93da4c39e5c1cbd1ae4f3ad3f1f2a/uricore/wkz_urls.py#L313-L334
+encode url,python,https://github.com/necaris/python3-openid/blob/4911bbc196dfd6f9eda7155df9903d668720ecbf/openid/message.py#L397-L400
+encode url,python,https://github.com/marvin-ai/marvin-python-toolbox/blob/7c95cb2f9698b989150ab94c1285f3a9eaaba423/marvin_python_toolbox/common/utils.py#L286-L295
+encode url,python,https://github.com/openid/python-openid/blob/f7e13536f0d1828d3cef5ae7a7b55cabadff37fc/openid/message.py#L363-L367
+create cookie,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+create cookie,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+create cookie,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+create cookie,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+create cookie,python,https://github.com/apache/incubator-mxnet/blob/1af29e9c060a4c7d60eeaacba32afdb9a7775ba7/example/gluon/sn_gan/model.py#L89-L117
+how to empty array,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+how to empty array,python,https://github.com/uber/tchannel-python/blob/ee08cce6234f24fd2373774988186dd374306c43/tchannel/deprecate.py#L29-L33
+how to empty array,python,https://github.com/jbasko/configmanager/blob/1d7229ce367143c7210d8e5f0782de03945a1721/configmanager/sections.py#L487-L493
+how to empty array,python,https://github.com/kata198/AdvancedHTMLParser/blob/06aeea5d8e2ea86e155aae0fc237623d3e9b7f9d/AdvancedHTMLParser/Parser.py#L839-L847
+how to empty array,python,https://github.com/chovanecm/sacredboard/blob/47e1c99e3be3c1b099d3772bc077f5666020eb0b/sacredboard/app/config/jinja_filters.py#L60-L62
+how to get current date,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+how to get current date,python,https://github.com/python-xlib/python-xlib/blob/8901e831737e79fe5645f48089d70e1d1046d2f2/Xlib/rdb.py#L320-L330
+how to get current date,python,https://github.com/caktus/django-timepiece/blob/52515dec027664890efbc535429e1ba1ee152f40/timepiece/utils/__init__.py#L100-L102
+how to get current date,python,https://github.com/desbma/sacad/blob/a7a010c4d9618a0c90927f1acb530101ca05fac4/sacad/tqdm_logging.py#L21-L39
+how to get current date,python,https://github.com/reorx/torext/blob/84c4300ebc7fab0dbd11cf8b020bc7d4d1570171/examples/formal_project/manage.py#L20-L27
+how to make the checkbox checked,python,https://github.com/Spinmob/spinmob/blob/f037f5df07f194bcd4a01f4d9916e57b9e8fb45a/egg/_gui.py#L915-L926
+how to make the checkbox checked,python,https://github.com/KelSolaar/Umbra/blob/66f45f08d9d723787f1191989f8b0dda84b412ce/umbra/ui/widgets/active_QLabel.py#L274-L284
+how to make the checkbox checked,python,https://github.com/bitesofcode/projexui/blob/f18a73bec84df90b034ca69b9deea118dbedfc4d/projexui/widgets/xtreewidget/xtreewidgetitem.py#L341-L350
+how to make the checkbox checked,python,https://github.com/Shapeways/coyote_framework/blob/cb29899b984a21d56bf65d0b1d907073948fe16c/coyote_framework/webdriver/webdriverwrapper/WebElementWrapper.py#L655-L660
+how to make the checkbox checked,python,https://github.com/bitesofcode/projexui/blob/f18a73bec84df90b034ca69b9deea118dbedfc4d/projexui/widgets/xsplitbutton.py#L461-L469
+initializing array,python,https://github.com/horazont/aioxmpp/blob/22a68e5e1d23f2a4dee470092adbd4672f9ef061/aioxmpp/muc/self_ping.py#L378-L389
+initializing array,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+initializing array,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+initializing array,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+initializing array,python,https://github.com/davisd50/sparc.cache/blob/f2378aad48c368a53820e97b093ace790d4d4121/sparc/cache/sql/sql.py#L186-L189
+how to reverse a string,python,https://github.com/awslabs/sockeye/blob/5d64a1ee1ef3cbba17c6d1d94bc061020c43f6ab/sockeye/vocab.py#L291-L298
+how to reverse a string,python,https://github.com/TheHive-Project/Cortex-Analyzers/blob/8dae6a8c4cf9af5554ae8c844985c4b44d4bd4bf/analyzers/Onyphe/onyphe_api.py#L116-L120
+how to reverse a string,python,https://github.com/spacetelescope/pysynphot/blob/a125ff956f4d94beb157bd51899747a13234bb97/commissioning/doscalars.py#L85-L90
+how to reverse a string,python,https://github.com/lpantano/seqcluster/blob/774e23add8cd4fdc83d626cea3bd1f458e7d060d/seqcluster/libs/thinkbayes.py#L104-L106
+how to reverse a string,python,https://github.com/liip/taxi/blob/269423c1f1ab571bd01a522819afe3e325bfbff6/taxi/aliases.py#L80-L85
+read properties file,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+read properties file,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+read properties file,python,https://github.com/inveniosoftware/invenio-files-rest/blob/59a950da61cc8d5882a03c6fde6db2e2ed10befd/invenio_files_rest/alembic/2e97565eba72_create_files_rest_tables.py#L217-L226
+read properties file,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+read properties file,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+copy to clipboard,python,https://github.com/hangyan/shaw/blob/63d01d35e225ba4edb9c61edaf351e1bc0e8fd15/shaw/types/d.py#L55-L60
+copy to clipboard,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+copy to clipboard,python,https://github.com/aws/sagemaker-python-sdk/blob/a9e724c7d3f5572b68c3903548c792a59d99799a/src/sagemaker/local/utils.py#L71-L80
+copy to clipboard,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+copy to clipboard,python,https://github.com/priestc/moneywagon/blob/00518f1f557dcca8b3031f46d3564c2baa0227a3/moneywagon/core.py#L111-L131
+convert html to pdf,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+convert html to pdf,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+convert html to pdf,python,https://github.com/gtaylor/django-athumb/blob/69261ace0dff81e33156a54440874456a7b38dfb/athumb/pial/helpers.py#L6-L12
+convert html to pdf,python,https://github.com/uber-common/opentracing-python-instrumentation/blob/57b29fb9f647e073cde8c75155f4708cb5661d20/opentracing_instrumentation/client_hooks/__init__.py#L33-L55
+convert html to pdf,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+json to xml conversion,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+json to xml conversion,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+json to xml conversion,python,https://github.com/intuition-io/intuition/blob/cd517e6b3b315a743eb4d0d0dc294e264ab913ce/intuition/data/ystockquote.py#L37-L130
+json to xml conversion,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+json to xml conversion,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+how to randomly pick a number,python,https://github.com/icq-bot/python-icq-bot/blob/1d278cc91f8eba5481bb8d70f80fc74160a40c8b/example/util.py#L36-L38
+how to randomly pick a number,python,https://github.com/acutesoftware/virtual-AI-simulator/blob/57de679a5b1a58c38fefe6aea58af1f3a7e79c58/vais/character.py#L59-L64
+how to randomly pick a number,python,https://github.com/gunthercox/ChatterBot/blob/1a03dcb45cba7bdc24d3db5e750582e0cb1518e2/chatterbot/response_selection.py#L66-L86
+how to randomly pick a number,python,https://github.com/joshspeagle/dynesty/blob/9e482aafeb5cf84bedb896fa6f07a761d917983e/dynesty/bounding.py#L86-L100
+how to randomly pick a number,python,https://github.com/joke2k/faker/blob/965824b61132e52d92d1a6ce470396dbbe01c96c/faker/providers/__init__.py#L207-L223
+normal distribution,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+normal distribution,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+normal distribution,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+normal distribution,python,https://github.com/GoogleCloudPlatform/httplib2shim/blob/e034530c551f11cf5690ef78a24c66087976c310/httplib2shim/__init__.py#L227-L253
+normal distribution,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+nelder mead optimize,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+nelder mead optimize,python,https://github.com/heuer/cablemap/blob/42066c8fc2972d237a2c35578e14525aaf705f38/cablemap.core/cablemap/core/predicates.py#L181-L212
+nelder mead optimize,python,https://github.com/rflamary/POT/blob/c5108efc7b6702e1af3928bef1032e6b37734d1c/ot/bregman.py#L974-L976
+nelder mead optimize,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+nelder mead optimize,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+hash set for counting distinct elements,python,https://github.com/cggh/scikit-allel/blob/3c979a57a100240ba959dd13f98839349530f215/allel/model/ndarray.py#L2510-L2520
+hash set for counting distinct elements,python,https://github.com/emlazzarin/acrylic/blob/08c6702d73b9660ead1024653f4fa016f6340e46/acrylic/datatable.py#L566-L570
+hash set for counting distinct elements,python,https://github.com/twosigma/marbles/blob/f0c668be8344c70d4d63bc57e82c6f2da43c6925/marbles/mixins/marbles/mixins/mixins.py#L374-L401
+hash set for counting distinct elements,python,https://github.com/pipermerriam/flex/blob/233f8149fb851a6255753bcec948cb6fefb2723b/flex/validation/common.py#L248-L264
+hash set for counting distinct elements,python,https://github.com/timothydmorton/VESPA/blob/0446b54d48009f3655cfd1a3957ceea21d3adcaa/vespa/hashutils.py#L82-L88
+how to get database table name,python,https://github.com/ibis-project/ibis/blob/1e39a5fd9ef088b45c155e8a5f541767ee8ef2e7/ibis/sql/alchemy.py#L811-L820
+how to get database table name,python,https://github.com/frictionlessdata/tableschema-sql-py/blob/81ca4b564f6dac5fe3adc6553b353826190df6f8/tableschema_sql/storage.py#L211-L217
+how to get database table name,python,https://github.com/ibis-project/ibis/blob/1e39a5fd9ef088b45c155e8a5f541767ee8ef2e7/ibis/client.py#L371-L380
+how to get database table name,python,https://github.com/cloudera/impyla/blob/547fa2ba3b6151e2a98b3544301471a643212dc3/impala/_thrift_gen/hive_metastore/ThriftHiveMetastore.py#L2226-L2233
+how to get database table name,python,https://github.com/datastax/python-driver/blob/30a80d0b798b1f45f8cb77163b1fa791f3e3ca29/cassandra/cqlengine/models.py#L528-L532
+deserialize json,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+deserialize json,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+deserialize json,python,https://github.com/inveniosoftware/invenio-files-rest/blob/59a950da61cc8d5882a03c6fde6db2e2ed10befd/invenio_files_rest/alembic/2e97565eba72_create_files_rest_tables.py#L217-L226
+deserialize json,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+deserialize json,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+find int in string,python,https://github.com/pgmpy/pgmpy/blob/9381a66aba3c3871d3ccd00672b148d17d63239e/pgmpy/extern/tabulate.py#L254-L263
+find int in string,python,https://github.com/skylander86/ycsettings/blob/3f363673a6cb1823ebb18c4d640d87aa49202344/ycsettings/settings.py#L313-L320
+find int in string,python,https://github.com/raphaelm/python-sepaxml/blob/187b699b1673c862002b2bae7e1bd62fe8623aec/sepaxml/utils.py#L79-L89
+find int in string,python,https://github.com/rraadd88/rohan/blob/b0643a3582a2fffc0165ace69fb80880d92bfb10/rohan/dandage/io_nums.py#L69-L78
+find int in string,python,https://github.com/romankoblov/leaf/blob/e042d91ec462c834318d03f199fcc4a9f565cb84/leaf/__init__.py#L117-L119
+get current process id,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+get current process id,python,https://github.com/vsoch/helpme/blob/e609172260b10cddadb2d2023ab26da8082a9feb/helpme/utils/memory.py#L30-L41
+get current process id,python,https://github.com/DataONEorg/d1_python/blob/3ac4d4f3ca052d3e8641a6a329cab526c8ddcb0d/gmn/src/d1_gmn/app/did.py#L80-L100
+get current process id,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+get current process id,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+regex case insensitive,python,https://github.com/docker/docker-py/blob/613d6aad83acc9931ff2ecfd6a6c7bd8061dc125/docker/utils/fnmatch.py#L26-L44
+regex case insensitive,python,https://github.com/wolfhong/formic/blob/0d81eb88dcbb6fa705194fc6ccf2993f4abbaa76/formic/formic.py#L168-L173
+regex case insensitive,python,https://github.com/wummel/dosage/blob/a0109c3a46219f280e6e5e77183674e40da0f304/scripts/scriptutil.py#L6-L11
+regex case insensitive,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+regex case insensitive,python,https://github.com/google/grr/blob/5cef4e8e2f0d5df43ea4877e9c798e0bf60bfe74/grr/server/grr_response_server/flows/general/filesystem.py#L835-L846
+custom http error response,python,https://github.com/GoogleCloudPlatform/httplib2shim/blob/e034530c551f11cf5690ef78a24c66087976c310/httplib2shim/__init__.py#L227-L253
+custom http error response,python,https://github.com/priestc/moneywagon/blob/00518f1f557dcca8b3031f46d3564c2baa0227a3/moneywagon/core.py#L111-L131
+custom http error response,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+custom http error response,python,https://github.com/peopledoc/django-agnocomplete/blob/9bf21db2f2036ba5059b843acd32902a09192053/demo/views_proxy.py#L153-L168
+custom http error response,python,https://github.com/uber/tchannel-python/blob/ee08cce6234f24fd2373774988186dd374306c43/tchannel/deprecate.py#L29-L33
+how to determine a string is a valid word,python,https://github.com/markuskiller/textblob-de/blob/1b427b2cdd7e5e9fd3697677a98358fae4aa6ad1/textblob_de/blob.py#L650-L659
+how to determine a string is a valid word,python,https://github.com/snare/voltron/blob/4ee3cbe6f7c1e38303f5dc6114c48b60217253c3/voltron/plugin.py#L133-L144
+how to determine a string is a valid word,python,https://github.com/lyda/misspell-check/blob/f8c5d67a5ffaeb0a7101efd5a4ace81c73955efa/misspellings_lib.py#L26-L30
+how to determine a string is a valid word,python,https://github.com/vowatchka/palindromus/blob/2fdac9259d7ba515d27cfde48c6d2be721594d66/palindromus/__init__.py#L232-L254
+how to determine a string is a valid word,python,https://github.com/dh1tw/pyhamtools/blob/ee7e4b8732e23c298da10e07163748156c16d0fa/pyhamtools/lookuplib.py#L1435-L1439
+html entities replace,python,https://github.com/prajwalkr/track-it/blob/01a91dba8e7bc169976e0b13faacf7dd7330237b/trackit/trackers.py#L385-L419
+html entities replace,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+html entities replace,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+html entities replace,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+html entities replace,python,https://github.com/kata198/AdvancedHTMLParser/blob/06aeea5d8e2ea86e155aae0fc237623d3e9b7f9d/AdvancedHTMLParser/Parser.py#L839-L847
+set file attrib hidden,python,https://github.com/senaite/senaite.core/blob/7602ce2ea2f9e81eb34e20ce17b98a3e70713f85/bika/lims/content/abstractroutineanalysis.py#L496-L508
+set file attrib hidden,python,https://github.com/python-constraint/python-constraint/blob/e23fe9852cddddf1c3e258e03f2175df24b4c702/constraint/__init__.py#L799-L810
+set file attrib hidden,python,https://github.com/frmdstryr/enamlx/blob/9582e29c88dc0c0340f912b49168b7307a47ed4f/enamlx/widgets/graphics_view.py#L456-L462
+set file attrib hidden,python,https://github.com/globality-corp/microcosm-flask/blob/c2eaf57f03e7d041eea343751a4a90fcc80df418/microcosm_flask/decorators/logging.py#L10-L28
+set file attrib hidden,python,https://github.com/bitesofcode/projexui/blob/f18a73bec84df90b034ca69b9deea118dbedfc4d/projexui/widgets/xtreewidget/xtreewidget.py#L1783-L1792
+sorting multiple arrays based on another arrays sorted order,python,https://github.com/datastore/datastore/blob/7ccf0cd4748001d3dbf5e6dda369b0f63e0269d3/datastore/core/query.py#L281-L283
+sorting multiple arrays based on another arrays sorted order,python,https://github.com/larsyencken/csvdiff/blob/163dd9da676a8e5f926a935803726340261f03ae/csvdiff/records.py#L86-L88
+sorting multiple arrays based on another arrays sorted order,python,https://github.com/jacebrowning/comparable/blob/48455e613650e22412d31109681368fcc479298d/comparable/tools.py#L68-L76
+sorting multiple arrays based on another arrays sorted order,python,https://github.com/fuzeman/PyUPnP/blob/6dea64be299952346a14300ab6cc7dac42736433/pyupnp/lict.py#L262-L267
+sorting multiple arrays based on another arrays sorted order,python,https://github.com/spyder-ide/spyder/blob/f76836ce1b924bcc4efd3f74f2960d26a4e528e0/spyder/plugins/explorer/widgets.py#L1147-L1149
+string similarity levenshtein,python,https://github.com/apache/spark/blob/618d6bff71073c8c93501ab7392c3cc579730f0b/python/pyspark/sql/functions.py#L1634-L1643
+string similarity levenshtein,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/distance/distance/_iterators.py#L3-L21
+string similarity levenshtein,python,https://github.com/loli/medpy/blob/95216b9e22e7ce301f0edf953ee2a2f1b6c6aee5/medpy/metric/histogram.py#L572-L625
+string similarity levenshtein,python,https://github.com/dtmilano/AndroidViewClient/blob/7e6e83fde63af99e5e4ab959712ecf94f9881aa2/src/com/dtmilano/android/viewclient.py#L4325-L4333
+string similarity levenshtein,python,https://github.com/lemieuxl/pyGenClean/blob/6173a48ccc0cf3a3bd711b1f2a1fa16248b8bf55/pyGenClean/LaTeX/utils.py#L155-L168
+how to get html of website,python,https://github.com/prajwalkr/track-it/blob/01a91dba8e7bc169976e0b13faacf7dd7330237b/trackit/trackers.py#L385-L419
+how to get html of website,python,https://github.com/openstax/rhaptos.cnxmlutils/blob/c32b1a7428dc652e8cd745f3fdf4019a20543649/rhaptos/cnxmlutils/utils.py#L241-L244
+how to get html of website,python,https://github.com/eventbrite/eventbrite-sdk-python/blob/f2e5dc5aa1aa3e45766de13f16fd65722163d91a/eventbrite/access_methods.py#L955-L961
+how to get html of website,python,https://github.com/dailymuse/oz/blob/4329f6a207dc9d2a8fbeb4d16d415dbe4570b5bd/oz/core/actions.py#L65-L141
+how to get html of website,python,https://github.com/KelSolaar/Umbra/blob/66f45f08d9d723787f1191989f8b0dda84b412ce/umbra/reporter.py#L435-L466
+buffered file reader read text,python,https://github.com/edeposit/edeposit.amqp.ftp/blob/fcdcbffb6e5d194e1bb4f85f0b8eaa9dbb08aa71/src/edeposit/amqp/ftp/monitor.py#L36-L48
+buffered file reader read text,python,https://github.com/saltstack/salt/blob/e8541fd6e744ab0df786c0f76102e41631f45d46/salt/modules/snapper.py#L522-L527
+buffered file reader read text,python,https://github.com/joeyespo/grip/blob/ce933ccc4ca8e0d3718f271c59bd530a4518bf63/grip/readers.py#L140-L146
+buffered file reader read text,python,https://github.com/Cologler/fsoopify-python/blob/83d45f16ae9abdea4fcc829373c32df501487dda/fsoopify/nodes.py#L193-L196
+buffered file reader read text,python,https://github.com/asyncdef/apyio/blob/d6b914929269b8795ca4d6b1ede8a393841cbc29/apyio/__init__.py#L150-L184
+encrypt aes ctr mode,python,https://github.com/google/grr/blob/5cef4e8e2f0d5df43ea4877e9c798e0bf60bfe74/grr/core/grr_response_core/lib/communicator.py#L102-L107
+encrypt aes ctr mode,python,https://github.com/google/grr/blob/5cef4e8e2f0d5df43ea4877e9c798e0bf60bfe74/grr/core/grr_response_core/lib/communicator.py#L109-L113
+encrypt aes ctr mode,python,https://github.com/YosaiProject/yosai/blob/7f96aa6b837ceae9bf3d7387cd7e35f5ab032575/yosai/core/mgt/mgt.py#L306-L314
+encrypt aes ctr mode,python,https://github.com/Azure/azure-storage-python/blob/52327354b192cbcf6b7905118ec6b5d57fa46275/azure-storage-queue/azure/storage/queue/_encryption.py#L124-L159
+encrypt aes ctr mode,python,https://github.com/shi-cong/PYSTUDY/blob/c8da7128ea18ecaa5849f2066d321e70d6f97f70/PYSTUDY/encryptlib.py#L60-L75
+matrix multiply,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+matrix multiply,python,https://github.com/rflamary/POT/blob/c5108efc7b6702e1af3928bef1032e6b37734d1c/ot/bregman.py#L974-L976
+matrix multiply,python,https://github.com/intuition-io/intuition/blob/cd517e6b3b315a743eb4d0d0dc294e264ab913ce/intuition/data/ystockquote.py#L37-L130
+matrix multiply,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+matrix multiply,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+print model summary,python,https://github.com/ultrabug/py3status/blob/4c105f1b44f7384ca4f7da5f821a47e468c7dee2/py3status/helpers.py#L6-L11
+print model summary,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+print model summary,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+print model summary,python,https://github.com/spyder-ide/qtawesome/blob/c88122aac5b7000eab9d2ae98d27fb3ade88d0f3/setupbase.py#L105-L107
+print model summary,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+unique elements,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+unique elements,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+unique elements,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+unique elements,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+unique elements,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+extract data from html content,python,https://github.com/huntrar/scrape/blob/bf877f6da5df3ed0f2bea60a95acf7df63c88002/scrape/utils.py#L309-L316
+extract data from html content,python,https://github.com/5monkeys/djedi-cms/blob/3c077edfda310717b9cdb4f2ee14e78723c94894/djedi/backends/django/cache/backend.py#L55-L63
+extract data from html content,python,https://github.com/onelogin/python3-saml/blob/064b7275fba1e5f39a9116ba1cdcc5d01fc34daa/src/onelogin/saml2/utils.py#L665-L697
+extract data from html content,python,https://github.com/kata198/AdvancedHTMLParser/blob/06aeea5d8e2ea86e155aae0fc237623d3e9b7f9d/AdvancedHTMLParser/Parser.py#L839-L847
+extract data from html content,python,https://github.com/johnnoone/json-spec/blob/f91981724cea0c366bd42a6670eb07bbe31c0e0c/src/jsonspec/pointer/__init__.py#L23-L33
+heatmap from 3d coordinates,python,https://github.com/MillionIntegrals/vel/blob/e0726e1f63742b728966ccae0c8b825ea0ba491a/vel/modules/resnet_v1.py#L10-L15
+heatmap from 3d coordinates,python,https://github.com/Cadene/pretrained-models.pytorch/blob/021d97897c9aa76ec759deff43d341c4fd45d7ba/pretrainedmodels/models/fbresnet/resnet152_load.py#L20-L23
+heatmap from 3d coordinates,python,https://github.com/255BITS/hyperchamber/blob/4d5774bde9ea6ce1113f77a069ffc605148482b8/examples/shared/resize_image_patch.py#L228-L246
+heatmap from 3d coordinates,python,https://github.com/tensorflow/tensor2tensor/blob/272500b6efe353aeb638d2745ed56e519462ca31/tensor2tensor/layers/common_layers.py#L291-L295
+heatmap from 3d coordinates,python,https://github.com/KrishnaswamyLab/PHATE/blob/346a4597dcfc523f8bef99bce482e677282b6719/Python/phate/plot.py#L477-L549
+get all parents of xml node,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+get all parents of xml node,python,https://github.com/thavel/synolopy/blob/fdb23cdde693b13a59af9873f03b2afab35cb50e/synolopy/cgi.py#L56-L62
+get all parents of xml node,python,https://github.com/NJDFan/ctypes-bitfield/blob/ae76b1dcfef7ecc90bd1900735b94ddee41a6376/bitfield/walk.py#L152-L161
+get all parents of xml node,python,https://github.com/daler/trackhub/blob/e4655f79177822529f80b923df117e38e28df702/trackhub/base.py#L67-L73
+get all parents of xml node,python,https://github.com/glue-viz/glue-vispy-viewers/blob/54a4351d98c1f90dfb1a557d1b447c1f57470eea/glue_vispy_viewers/extern/vispy/scene/node.py#L402-L416
+how to extract zip file recursively,python,https://github.com/tensorpack/tensorpack/blob/d7a13cb74c9066bc791d7aafc3b744b60ee79a9f/tensorpack/utils/fs.py#L77-L84
+how to extract zip file recursively,python,https://github.com/kylef/refract.py/blob/f58ddf619038b580ab50c2e7f867d59d153eabbb/refract/elements/base.py#L206-L215
+how to extract zip file recursively,python,https://github.com/Yelp/detect-secrets/blob/473923ea71f1ac2b5ea1eacc49b98f97967e3d05/detect_secrets/core/baseline.py#L275-L284
+how to extract zip file recursively,python,https://github.com/openpaperwork/paperwork-backend/blob/114b831e94e039e68b339751fd18250877abad76/paperwork_backend/fs.py#L427-L452
+how to extract zip file recursively,python,https://github.com/FactoryBoy/factory_boy/blob/edaa7c7f5a14065b229927903bd7989cc93cd069/factory/builder.py#L308-L310
+underline text in label widget,python,https://github.com/pyviz/holoviews/blob/ae0dd2f3de448b0ca5e9065aabd6ef8d84c7e655/holoviews/core/operation.py#L90-L98
+underline text in label widget,python,https://github.com/trevisanj/a99/blob/193e6e3c9b3e4f4a0ba7eb3eece846fe7045c539/a99/textinterface.py#L16-L34
+underline text in label widget,python,https://github.com/awslabs/aws-sam-cli/blob/c05af5e7378c6f05f7d82ad3f0bca17204177db6/samcli/lib/utils/colors.py#L57-L59
+underline text in label widget,python,https://github.com/Josef-Friedrich/tmep/blob/326de14f5b9498696a1f06a8be3d39e33e376102/tmep/doc.py#L54-L58
+underline text in label widget,python,https://github.com/openstack/horizon/blob/5601ea9477323e599d9b766fcac1f8be742935b2/openstack_dashboard/utils/filters.py#L32-L47
+unzipping large files,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+unzipping large files,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+unzipping large files,python,https://github.com/inveniosoftware/invenio-files-rest/blob/59a950da61cc8d5882a03c6fde6db2e2ed10befd/invenio_files_rest/alembic/2e97565eba72_create_files_rest_tables.py#L217-L226
+unzipping large files,python,https://github.com/vanheeringen-lab/gimmemotifs/blob/1dc0572179e5d0c8f96958060133c1f8d92c6675/gimmemotifs/tools.py#L1598-L1633
+unzipping large files,python,https://github.com/kata198/AdvancedHTMLParser/blob/06aeea5d8e2ea86e155aae0fc237623d3e9b7f9d/AdvancedHTMLParser/Parser.py#L839-L847
+copying a file to a path,python,https://github.com/jssimporter/python-jss/blob/b95185d74e0c0531b0b563f280d4129e21d5fe5d/jss/distribution_point.py#L399-L408
+copying a file to a path,python,https://github.com/moin18/utilspie/blob/ea96860b93fd058019a829847258e39323fef31f/utilspie/fileutils/file_utils.py#L34-L50
+copying a file to a path,python,https://github.com/CartoDB/carto-python/blob/f6ac3d17ed08e5bc3f99edd2bde4fb7dba3eee16/carto/sql.py#L488-L507
+copying a file to a path,python,https://github.com/hyde/fswrap/blob/41e4ad6f7e9ba73eabe61bd97847cd284e3edbd2/fswrap.py#L299-L308
+copying a file to a path,python,https://github.com/klen/starter/blob/24a65c10d4ac5a9ca8fc1d8b3d54b3fb13603f5f/starter/core.py#L52-L58
+get the description of a http status code,python,https://github.com/vecnet/vecnet.simulation/blob/3a4b3df7b12418c6fa8a7d9cd49656a1c031fc0e/vecnet/simulation/sim_status.py#L47-L54
+get the description of a http status code,python,https://github.com/amcat/amcatclient/blob/bda525f7ace0c26a09fa56d2baf7550f639e62ee/amcatclient/amcatclient.py#L303-L306
+get the description of a http status code,python,https://github.com/PostmonAPI/postmon-python/blob/bfd3a38a8aec5e069536a0bc36440946d1981e37/postmon.py#L72-L92
+get the description of a http status code,python,https://github.com/codeforamerica/epa_python/blob/62a53da62936bea8daa487a01a52b973e9062b2c/epa/pcs/pcs.py#L46-L56
+get the description of a http status code,python,https://github.com/cloudendpoints/endpoints-python/blob/00dd7c7a52a9ee39d5923191c2604b8eafdb3f24/endpoints/errors.py#L239-L253
+randomly extract x items from a list,python,https://github.com/numenta/htmresearch/blob/70c096b09a577ea0432c3f3bfff4442d4871b7aa/htmresearch/frameworks/layers/simple_object_machine.py#L212-L239
+randomly extract x items from a list,python,https://github.com/frank2/hotmic/blob/5d4eb3252b0608d19cce6a1f1673b552f51bd351/lib/__init__.py#L74-L82
+randomly extract x items from a list,python,https://github.com/thunder-project/thunder/blob/967ff8f3e7c2fabe1705743d95eb2746d4329786/thunder/images/readers.py#L438-L459
+randomly extract x items from a list,python,https://github.com/jaredLunde/vital-tools/blob/ea924c9bbb6ec22aa66f8095f018b1ee0099ac04/vital/tools/lists.py#L91-L99
+randomly extract x items from a list,python,https://github.com/ECRL/ecabc/blob/4e73125ff90bfeeae359a5ab1badba8894d70eaa/ecabc/abc.py#L539-L567
+convert a date string into yyyymmdd,python,https://github.com/casacore/python-casacore/blob/975510861ea005f7919dd9e438b5f98a1682eebe/casacore/tables/tablehelper.py#L131-L145
+convert a date string into yyyymmdd,python,https://github.com/f213/rumetr-client/blob/5180152bcb2eed8246b88035db7c0bb1fe603166/rumetr/scrapy/pipeline.py#L109-L119
+convert a date string into yyyymmdd,python,https://github.com/sdispater/pendulum/blob/94d28b0d3cb524ae02361bd1ed7ea03e2e655e4e/pendulum/formatting/formatter.py#L309-L356
+convert a date string into yyyymmdd,python,https://github.com/Ouranosinc/xclim/blob/2080d139188bd8de2aeca097a025c2d89d6e0e09/xclim/checks.py#L36-L54
+convert a date string into yyyymmdd,python,https://github.com/tanghaibao/goatools/blob/407682e573a108864a79031f8ca19ee3bf377626/goatools/anno/annoreader_base.py#L139-L141
+convert a utc time to epoch,python,https://github.com/T-002/pycast/blob/8a53505c6d8367e0ea572e8af768e80b29e1cc41/pycast/common/timeseries.py#L323-L335
+convert a utc time to epoch,python,https://github.com/amicks/Speculator/blob/f7d6590aded20b1e1b5df16a4b27228ee821c4ab/speculator/utils/date.py#L17-L28
+convert a utc time to epoch,python,https://github.com/collectiveacuity/labPack/blob/52949ece35e72e3cc308f54d9ffa6bfbd96805b8/labpack/records/time.py#L60-L70
+convert a utc time to epoch,python,https://github.com/halcy/Mastodon.py/blob/35c43562dd3d34d6ebf7a0f757c09e8fcccc957c/mastodon/Mastodon.py#L2443-L2458
+convert a utc time to epoch,python,https://github.com/rapidpro/expressions/blob/b03d91ec58fc328960bce90ecb5fa49dcf467627/python/temba_expressions/functions/custom.py#L44-L48
+all permutations of a list,python,https://github.com/openai/universe/blob/cc9ce6ec241821bfb0f3b85dd455bd36e4ee7a8c/universe/vncdriver/vendor/pydes.py#L454-L456
+all permutations of a list,python,https://github.com/opennode/waldur-core/blob/d6c17a9592bb6c49c33567542eef8d099605a46a/waldur_core/structure/views.py#L611-L638
+all permutations of a list,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+all permutations of a list,python,https://github.com/opennode/waldur-core/blob/d6c17a9592bb6c49c33567542eef8d099605a46a/waldur_core/structure/views.py#L689-L712
+all permutations of a list,python,https://github.com/mabuchilab/QNET/blob/cc20d26dad78691d34c67173e5cd67dcac94208a/src/qnet/utils/permutations.py#L221-L239
+extract latitude and longitude from given input,python,https://github.com/bennylope/smartystreets.py/blob/f45e37dd52ea7cec8ed43ce2b64724beb6dbbb69/smartystreets/data.py#L15-L27
+extract latitude and longitude from given input,python,https://github.com/gem/oq-engine/blob/8294553a0b8aba33fd96437a35065d03547d0040/openquake/hazardlib/valid.py#L437-L446
+extract latitude and longitude from given input,python,https://github.com/twitterdev/tweet_parser/blob/3435de8367d36b483a6cfd8d46cc28694ee8a42e/tweet_parser/getter_methods/tweet_geo.py#L7-L33
+extract latitude and longitude from given input,python,https://github.com/Hackerfleet/hfos/blob/b6df14eacaffb6be5c844108873ff8763ec7f0c9/modules/maps/hfos/map/TileTools.py#L47-L63
+extract latitude and longitude from given input,python,https://github.com/geometalab/pyGeoTile/blob/b1f44271698f5fc4d18c2add935797ed43254aa6/pygeotile/tile.py#L63-L67
+how to check if a checkbox is checked,python,https://github.com/Shapeways/coyote_framework/blob/cb29899b984a21d56bf65d0b1d907073948fe16c/coyote_framework/webdriver/webdriverwrapper/WebElementWrapper.py#L655-L660
+how to check if a checkbox is checked,python,https://github.com/aloetesting/aloe_webdriver/blob/65d847da4bdc63f9c015cb19d4efdee87df8ffad/aloe_webdriver/__init__.py#L564-L568
+how to check if a checkbox is checked,python,https://github.com/aloetesting/aloe_webdriver/blob/65d847da4bdc63f9c015cb19d4efdee87df8ffad/aloe_webdriver/__init__.py#L542-L547
+how to check if a checkbox is checked,python,https://github.com/nesaro/pydsl/blob/00b4fffd72036b80335e1a44a888fac57917ab41/pydsl/check.py#L29-L32
+how to check if a checkbox is checked,python,https://github.com/angr/angr/blob/4e2f97d56af5419ee73bdb30482c8dd8ff5f3e40/angr/engines/engine.py#L86-L100
+converting uint8 array to image,python,https://github.com/sony/nnabla/blob/aaf3d33b7cbb38f2a03aa754178ba8f7c8481320/python/src/nnabla/utils/image_utils/pil_utils.py#L118-L147
+converting uint8 array to image,python,https://github.com/apache/incubator-mxnet/blob/1af29e9c060a4c7d60eeaacba32afdb9a7775ba7/example/ctc/captcha_generator.py#L48-L67
+converting uint8 array to image,python,https://github.com/apache/incubator-mxnet/blob/1af29e9c060a4c7d60eeaacba32afdb9a7775ba7/docs/tutorial_utils/vision/cnn_visualization/gradcam.py#L199-L207
+converting uint8 array to image,python,https://github.com/sony/nnabla/blob/aaf3d33b7cbb38f2a03aa754178ba8f7c8481320/python/src/nnabla/utils/image_utils/cv2_utils.py#L152-L186
+converting uint8 array to image,python,https://github.com/sony/nnabla/blob/aaf3d33b7cbb38f2a03aa754178ba8f7c8481320/python/src/nnabla/utils/image_utils/pypng_utils.py#L125-L160
+memoize to disk  - persistent memoization,python,https://github.com/sdispater/cachy/blob/ee4b044d6aafa80125730a00b1f679a7bd852b8a/cachy/stores/redis_store.py#L88-L100
+memoize to disk  - persistent memoization,python,https://github.com/72squared/redpipe/blob/e6ee518bc9f3e2fee323c8c53d08997799bd9b1b/redpipe/keyspaces.py#L275-L283
+memoize to disk  - persistent memoization,python,https://github.com/StellarCN/py-stellar-base/blob/cce2e782064fb3955c85e1696e630d67b1010848/stellar_base/memo.py#L127-L129
+memoize to disk  - persistent memoization,python,https://github.com/wheeler-microfluidics/dmf-control-board-firmware/blob/1cd8cc9a148d530f9a11f634f2dbfe73f08aa27c/dmf_control_board_firmware/__init__.py#L1504-L1520
+memoize to disk  - persistent memoization,python,https://github.com/tobgu/pyrsistent/blob/c84dab0daaa44973cbe83830d14888827b307632/pyrsistent/_pmap.py#L168-L182
+parse command line argument,python,https://github.com/wbonnet/mnemonic-checker/blob/cec3f25b447c111f4d31fabcaee89af7977cafd8/mnemonic_checker/__main__.py#L26-L33
+parse command line argument,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+parse command line argument,python,https://github.com/tamasgal/km3pipe/blob/7a9b59ac899a28775b5bdc5d391d9a5340d08040/km3pipe/utils/ligiermirror.py#L44-L61
+parse command line argument,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+parse command line argument,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+how to read the contents of a .gz compressed file?,python,https://github.com/MacHu-GWU/dataIO-project/blob/7e1cc192b5e53426eed6dbd742918619b8fd60ab/dataIO/textfile.py#L63-L72
+how to read the contents of a .gz compressed file?,python,https://github.com/brunato/lograptor/blob/b1f09fe1b429ed15110610092704ef12d253f3c9/lograptor/utils.py#L42-L75
+how to read the contents of a .gz compressed file?,python,https://github.com/django-cumulus/django-cumulus/blob/64feb07b857af28f226be4899e875c29405e261d/cumulus/storage.py#L93-L101
+how to read the contents of a .gz compressed file?,python,https://github.com/jldbc/pybaseball/blob/085ea26bfd1b5f5926d79d4fac985c88278115f2/pybaseball/utils.py#L95-L101
+how to read the contents of a .gz compressed file?,python,https://github.com/openstack/proliantutils/blob/86ef3b47b4eca97c221577e3570b0240d6a25f22/proliantutils/rest/v1.py#L62-L94
+sending binary data over a serial connection,python,https://github.com/openvax/isovar/blob/b39b684920e3f6b344851d6598a1a1c67bce913b/isovar/protein_sequences.py#L182-L190
+sending binary data over a serial connection,python,https://github.com/CityOfZion/neo-python/blob/fe90f62e123d720d4281c79af0598d9df9e776fb/neo/Core/Header.py#L95-L103
+sending binary data over a serial connection,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+sending binary data over a serial connection,python,https://github.com/pedrotgn/pyactor/blob/24d98d134dd4228f2ba38e83611e9c3f50ec2fd4/pyactor/thread/actor.py#L141-L148
+sending binary data over a serial connection,python,https://github.com/untwisted/untwisted/blob/8a8d9c8a8d0f3452d5de67cd760297bb5759f637/untwisted/expect.py#L43-L48
+extracting data from a text file,python,https://github.com/MisterY/gnucash-portfolio/blob/bfaad8345a5479d1cd111acee1939e25c2a638c2/gnucash_portfolio/lib/fileutils.py#L3-L8
+extracting data from a text file,python,https://github.com/joeyespo/grip/blob/ce933ccc4ca8e0d3718f271c59bd530a4518bf63/grip/readers.py#L140-L146
+extracting data from a text file,python,https://github.com/Cologler/fsoopify-python/blob/83d45f16ae9abdea4fcc829373c32df501487dda/fsoopify/nodes.py#L193-L196
+extracting data from a text file,python,https://github.com/python/core-workflow/blob/b93c76195f6db382cfcefee334380fb4c68d4e21/blurb/blurb.py#L545-L553
+extracting data from a text file,python,https://github.com/barrust/pyspellchecker/blob/fa96024c0cdeba99e10e11060d5fd7aba796b271/spellchecker/spellchecker.py#L372-L381
+positions of substrings in string,python,https://github.com/last-partizan/pytils/blob/1c570a32b15e564bc68587b8207e32d464e61d08/pytils/typo.py#L9-L15
+positions of substrings in string,python,https://github.com/PetrochukM/PyTorch-NLP/blob/5f7320da5c8d781df072fab3f7e421c6347e5bfa/torchnlp/encoders/text/subword_text_tokenizer.py#L204-L216
+positions of substrings in string,python,https://github.com/facelessuser/soupsieve/blob/24859cc3e756ebf46b75547d49c6b4a7bf35ee82/soupsieve/css_match.py#L871-L878
+positions of substrings in string,python,https://github.com/ChrisCummins/labm8/blob/dd10d67a757aefb180cb508f86696f99440c94f5/text.py#L40-L52
+positions of substrings in string,python,https://github.com/dslackw/slpkg/blob/dd2e08a80e944d337d157b992167ba631a4343de/slpkg/__metadata__.py#L55-L64
+reading element from html - <td>,python,https://github.com/treasure-data/pandas-td/blob/0f4e1ee726f593dbb9cc74312c286e62afdf7de2/pandas_td/td.py#L532-L562
+reading element from html - <td>,python,https://github.com/edeposit/edeposit.amqp.harvester/blob/38cb87ccdf6bf2f550a98460d0a329c4b9dc8e2e/src/edeposit/amqp/harvester/scrappers/cpress_cz.py#L150-L163
+reading element from html - <td>,python,https://github.com/aliyun/aliyun-log-python-sdk/blob/ac383db0a16abf1e5ef7df36074374184b43516e/aliyun/log/util.py#L177-L190
+reading element from html - <td>,python,https://github.com/OCHA-DAP/hdx-python-utilities/blob/9c89e0aa5afac2c002b02a2d8f0e5b91eeb3d2a3/src/hdx/utilities/html.py#L52-L83
+reading element from html - <td>,python,https://github.com/plumdog/flask_table/blob/1eae252c6b26037a6aa19fcd787a981ddb3a9191/flask_table/columns.py#L102-L113
+deducting the median from each column,python,https://github.com/iotile/coretools/blob/2d794f5f1346b841b0dcd16c9d284e9bf2f3c6ec/iotilecore/iotile/core/utilities/intelhex/bench.py#L45-L52
+deducting the median from each column,python,https://github.com/ozak/georasters/blob/0612bd91bb2a2cb2f1d59ba89c1ff131dae27d70/georasters/georasters.py#L593-L613
+deducting the median from each column,python,https://github.com/saltstack/salt/blob/e8541fd6e744ab0df786c0f76102e41631f45d46/salt/thorium/calc.py#L180-L200
+deducting the median from each column,python,https://github.com/lambdalisue/maidenhair/blob/d5095c1087d1f4d71cc57410492151d2803a9f0d/src/maidenhair/statistics/__init__.py#L66-L93
+deducting the median from each column,python,https://github.com/modin-project/modin/blob/5b77d242596560c646b8405340c9ce64acb183cb/modin/backends/pandas/query_compiler.py#L1251-L1263
+concatenate several file remove header lines,python,https://github.com/kevin1024/vcrpy/blob/114fcd29b43c55896aaa6a6613bc7766f2707c8b/vcr/stubs/__init__.py#L40-L50
+concatenate several file remove header lines,python,https://github.com/limodou/uliweb/blob/34472f25e4bc0b954a35346672f94e84ef18b076/uliweb/lib/werkzeug/formparser.py#L245-L272
+concatenate several file remove header lines,python,https://github.com/KnowledgeLinks/rdfframework/blob/9ec32dcc4bed51650a4b392cc5c15100fef7923a/rdfframework/utilities/formattingfunctions.py#L166-L177
+concatenate several file remove header lines,python,https://github.com/nschloe/asciiplotlib/blob/11f4d2584b9b832dc06eb78bab9267f98cb3fdb0/asciiplotlib/table.py#L163-L173
+concatenate several file remove header lines,python,https://github.com/pudo/googlesheets/blob/c38725d79bfe048c0519a674019ba313dfc5bfb0/googlesheets/util.py#L6-L11
+parse query string in url,python,https://github.com/jxtech/wechatpy/blob/4df0da795618c0895a10f1c2cde9e9d5c0a93aaa/wechatpy/utils.py#L130-L137
+parse query string in url,python,https://github.com/Jaymon/endpoints/blob/2f1c4ae2c69a168e69447d3d8395ada7becaa5fb/endpoints/http.py#L987-L993
+parse query string in url,python,https://github.com/johntruckenbrodt/spatialist/blob/007f49296a156de8d7168ad235b5a5b8e8d3633d/spatialist/ancillary.py#L585-L590
+parse query string in url,python,https://github.com/aio-libs/yarl/blob/e47da02c00ad764e030ca7647a9565548c97d362/yarl/__init__.py#L525-L529
+parse query string in url,python,https://github.com/Unidata/siphon/blob/53fb0d84fbce1c18c8e81c9e68bc81620ee0a6ac/siphon/http_util.py#L381-L402
+fuzzy match ranking,python,https://github.com/priestc/moneywagon/blob/00518f1f557dcca8b3031f46d3564c2baa0227a3/moneywagon/core.py#L111-L131
+fuzzy match ranking,python,https://github.com/vmware/pyvmomi/blob/3ffcb23bf77d757175c0d5216ba9a25345d824cd/pyVmomi/Differ.py#L31-L40
+fuzzy match ranking,python,https://github.com/LukeB42/Window/blob/6d91c5ff94b8127e9c60f6eb78b7f9026d2faf62/window.py#L63-L87
+fuzzy match ranking,python,https://github.com/beerfactory/hbmqtt/blob/4aa6fe982141abc3c54e9f4d7b981ab3eba0a13c/hbmqtt/mqtt/protocol/handler.py#L277-L355
+fuzzy match ranking,python,https://github.com/lrq3000/pyFileFixity/blob/fd5ef23bb13835faf1e3baa773619b86a1cc9bdf/pyFileFixity/lib/profilers/visual/runsnakerun/runsnake.py#L873-L877
+output to html file,python,https://github.com/openstax/rhaptos.cnxmlutils/blob/c32b1a7428dc652e8cd745f3fdf4019a20543649/rhaptos/cnxmlutils/utils.py#L241-L244
+output to html file,python,https://github.com/google/python-gflags/blob/4f06c3d0d6cbe9b1fb90ee9fb1c082b3bf9285f6/gflags2man.py#L446-L451
+output to html file,python,https://github.com/csurfer/gitsuggest/blob/02efdbf50acb094e502aef9c139dde62676455ee/gitsuggest/utilities.py#L39-L48
+output to html file,python,https://github.com/adamzap/landslide/blob/59b0403d7a7cca4b8ff6ba7fb76efb9748b3f832/landslide/generator.py#L542-L552
+output to html file,python,https://github.com/sosy-lab/benchexec/blob/44428f67f41384c03aea13e7e25f884764653617/benchexec/util.py#L76-L82
+how to read .csv file in an efficient way?,python,https://github.com/eleme/ruskit/blob/2e8c5a3f6a65b8aeb07012b4e2c8ba324d887c3b/ruskit/cmds/manage.py#L107-L113
+how to read .csv file in an efficient way?,python,https://github.com/prajwalkr/track-it/blob/01a91dba8e7bc169976e0b13faacf7dd7330237b/trackit/trackers.py#L385-L419
+how to read .csv file in an efficient way?,python,https://github.com/PaulHancock/Aegean/blob/185d2b4a51b48441a1df747efc9a5271c79399fd/AegeanTools/source_finder.py#L1849-L1898
+how to read .csv file in an efficient way?,python,https://github.com/sqlboy/fileseq/blob/f26c3c3c383134ce27d5dfe37793e1ebe88e69ad/src/fileseq/frameset.py#L408-L416
+how to read .csv file in an efficient way?,python,https://github.com/cozy/python_cozy_management/blob/820cea58458ae3e067fa8cc2da38edbda4681dac/cozy_management/migration.py#L73-L106
