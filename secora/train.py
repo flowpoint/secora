@@ -63,15 +63,17 @@ _optimizer_mapping = {'adam': torch.optim.Adam,
 class RunNameSetting(Setting):
     ''' enforces a naming scheme for training runs 
     prefix = run | test | debug | profile
-    readable name = a0
-    run number = 0
-    trial number = 0
+    readable name = aname0withnumbers
+    trial number = t0
+    start timestamp rounded to upper second = utc1645359851
     example:
-    run_a0name_0_0
+    name := prefix readable_name trial_number 
+    run_aname0withnumbers_t0_utc1645359851
     '''
+
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
-        self.scheme = re.compile('(run|test|debug|profile)_\w\w*_\d+(_\d)*\Z')
+        self.scheme = re.compile('(run|test|debug|profile)_\w\w*_t\d+_utc(\d)+\Z')
 
     @property
     def allowed_type(self):
@@ -112,7 +114,8 @@ class TrainingConfig(SimpleConfig):
             IntSetting('embedding_size', lb=0),
             FloatSetting('grad_clip', lb=0.),
             DirectorySetting('logdir'),
-            DirectorySetting('checkpoint_dir')]
+            DirectorySetting('checkpoint_dir')
+            ]
 
         for s in setts:
             self.add(s)
@@ -206,7 +209,6 @@ def train_shard(
 
 def train(config, preempt_callback=None, **kwargs):
     #check_config(config)
-
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
@@ -391,8 +393,14 @@ if __name__ == "__main__":
     with args.config_file as f:
         config_candidate = yaml.safe_load(f)
 
+    timestamp = str(ceil(time.time()))
     if args.name is not None:
-        config_candidate['name'] = args.name
+        if args.debug == True:
+            prefix = 'debug'
+        else: 
+            prefix = 'run'
+            
+        config_candidate['name'] = f'{prefix}_{args.name}_t0_utc{timestamp}'
 
     if args.batch_size is not None:
         config_candidate['batch_size'] = args.batch_size
@@ -405,7 +413,7 @@ if __name__ == "__main__":
     config.final()
 
     logdir = os.path.join(config['logdir'], config['name'])
-    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+    checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 

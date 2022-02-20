@@ -53,7 +53,7 @@ class EmbeddingModel(torch.nn.Module):
                 *args, 
                 **kwargs).last_hidden_state
         x = x[:, 0, :]
-        #x = self.pooling(x)
+        x = self.pooling(x)
         #x = self.activation(x)
         return x
 

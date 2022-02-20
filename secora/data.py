@@ -8,7 +8,7 @@ import datasets
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from enum import Enum, auto
-from config import Setting
+from .config import Setting
 
 LANGUAGES = ['python',
     'java',
@@ -39,7 +39,7 @@ def preproc_valid(sample):
     return {'func_code_string': " ".join(sample['func_code_tokens'])}
 
 
-def fair_truncate(doc, code, max_length):
+def fair_truncate_old(doc, code, max_length):
     ''' truncates two strings fairly '''
     dlen = len(doc)
     clen = len(code)
@@ -61,44 +61,71 @@ def fair_truncate(doc, code, max_length):
 class PreprocessMode(Enum):
     CONCAT = 'concat'
 
-def tokenize_train_sample(tokenizer, batch, config):
-    ''' this is run in batch mode, so the features are batched '''
-    max_length = config['max_input_tokens']
+def fair_truncate(tokenizer, doc, code, max_input_tokens):
+    # optimize for fair length between doc/code tokens
+    #grow sequence sizes fairly, until max_input_tokens is reached
+    opt_steps = 0
+    max_dlength = 1
+    max_clength = 1
+    # return the old sample that is still < max_input_tokens
+    tr_sample = doc[:max_dlength] + tokenizer.sep_token + code[:max_clength]
+    new_tr_sample = tr_sample
 
-    mode = config['preprocess_mode']
+    while True:
+        tr_sample = new_tr_sample
+        new_tr_sample = doc[:max_dlength] + tokenizer.sep_token + code[:max_clength]
+        tok = tokenizer(
+                new_tr_sample,
+                padding=False, 
+                max_length=None, 
+                truncation=False, 
+                return_token_type_ids=True)
+
+
+        opt_steps += 1
+        if opt_steps > 1000:
+            raise RuntimeError('too many steps taken during fair tokenization')
+        
+        if len(tok['input_ids']) >= max_input_tokens:
+            return tr_sample
+        elif max_dlength <= max_clength and max_dlength < len(doc):
+            max_dlength = int(max_dlength*1.2)+1
+        elif max_clength <= max_dlength and max_clength < len(code):
+            max_clength = int(max_clength*1.2)+1
+        # both doc and code fully fit
+        else:
+            return doc + tokenizer.sep_token + code
+
+def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
+    ''' this is run in batch mode, so the features are batched '''
+    doc = " ".join(sample['func_documentation_tokens'])
+    code = " ".join(sample['func_code_tokens'])
+
     #if mode == V'joint':
     #    whole = batch['whole_func_string']
-    if mode == PreprocessMode.CONCAT:
-        whole = []
-        for doc, code in zip(batch['func_documentation_tokens'],batch['func_code_tokens']):
-            d, c = fair_truncate(
-                " ".join(doc),
-                " ".join(code),
-                max_length
-                )
-            whole.append(d + tokenizer.sep_token + c)
 
+    if mode == PreprocessMode.CONCAT:
+        trunc_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
+        tokenized_sample = tokenizer(trunc_sample, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
     else:
         raise RuntimeError(f"preprocess mode: {mode} is not supported")
 
-    tokenized_code = tokenizer(whole, padding='max_length', max_length=max_length, truncation=True, return_token_type_ids=True)
-
     proc_batch = dict()
 
-    for k, v in tokenized_code.items():
+    for k, v in tokenized_sample.items():
         proc_batch[k] = v
 
     return proc_batch
 
 
-def tokenize_valid_sample(tokenizer, batch, config):
+def tokenize_valid_sample(tokenizer, batch, max_input_tokens):
     code = batch['func_code_string']
     doc = [x + tokenizer.sep_token for x in batch['func_documentation_string']]
 
     # call tokenizer twice instead of on a pair, so that its impossible to leak data between code and doc
     # instead of the joint tokenization
-    tokenized_code = tokenizer(code, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
-    tokenized_doc = tokenizer(doc, padding='max_length', max_length=config['max_input_tokens'], truncation=True, return_token_type_ids=True)
+    tokenized_code = tokenizer(code, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
+    tokenized_doc = tokenizer(doc, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
 
     proc_batch = dict()
 
@@ -143,16 +170,10 @@ def preprocess_split(split, config, limit_samples=None, **kwargs):
 
     dataset = dataset.rename_column("func_code_url", "url")
 
-    # optional:
-    # write a custom bucketing data collator to remove the need for padding and truncation
-    # resulting in dynamic length sequences
-
-    # preprocess tokenize the dataset once
-    # by using batched, the tokenizer automatically pads and truncates to the same length
     if split == DataSplit.TRAIN:
         def tokenize_fn(x): return tokenize_train_sample(tokenizer, x, config)
     else:
-        def tokenize_fn(x): return tokenize_valid_sample(tokenizer, x, config)
+        def tokenize_fn(x): return tokenize_valid_sample(tokenizer, x, config['max_input_tokens'])
 
     dataset = dataset.map(
             tokenize_fn,

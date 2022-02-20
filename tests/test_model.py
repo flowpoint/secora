@@ -46,7 +46,7 @@ def test_bi_embeddingmodel():
 def test_bi_embeddingmodelcuda():
     embsize = 128
 
-    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, embsize, Precision.FP16 ).to('cuda')
+    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, embsize, AMP.FP16 ).to('cuda')
     input_ids = torch.ones([1,512], dtype=torch.int64).to('cuda')
     token_type_ids = torch.zeros([1,512], dtype=torch.int64).to('cuda')
     attention_mask = torch.zeros([1,512], dtype=torch.int64).to('cuda')
