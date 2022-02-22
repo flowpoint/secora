@@ -35,12 +35,14 @@ class EmbeddingModel(torch.nn.Module):
 
         # use [cls] pooling like simcse, because of its effectiveness
         self.embsize = embsize
+        '''
         self.pooling = torch.nn.Linear(
                 self.base_model.config.hidden_size,
                 self.embsize
                 )
         self.dropout = torch.nn.Dropout(p=0.1)
         self.activation = torch.nn.Tanh()
+        '''
 
     @property
     def embedding_size(self):
@@ -53,29 +55,10 @@ class EmbeddingModel(torch.nn.Module):
                 *args, 
                 **kwargs).last_hidden_state
         x = x[:, 0, :]
-        x = self.pooling(x)
-        x = self.dropout(x)
+        #x = self.pooling(x)
+        #x = self.dropout(x)
         #x = self.activation(x)
         return x
-
-class BiEmbeddingModel(torch.nn.Module):
-    def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
-        super().__init__()
-        self.m = EmbeddingModel(basemodel, embsize, **kwargs)
-
-    @property
-    def embedding_size(self):
-        return self.m.embedding_size
-
-    def forward(self, input_ids, attention_mask, *args, **kwargs):
-        x1 = self.m(input_ids, attention_mask, *args, **kwargs)
-        if self.training == True:
-            x2 = self.m(input_ids, attention_mask, *args, **kwargs)
-        else:
-            x2 = torch.zeros_like(x1)
-        x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
-        return x
-
 
 class AMP(Enum):
     FP32 = 'fp32'
@@ -90,10 +73,10 @@ _precision_map = {
         'bf16': torch.bfloat16
         }
 
-class BiEmbeddingModelCuda(torch.nn.Module):
+class EmbeddingModelCuda(torch.nn.Module):
     def __init__(self, basemodel: BaseModel, embsize: int, amp: AMP, **kwargs):
         super().__init__()
-        self.m = BiEmbeddingModel(basemodel, embsize, **kwargs)
+        self.m = EmbeddingModel(basemodel, embsize, **kwargs)
         self.amp = amp
         self.is_graphed = False
 
@@ -123,7 +106,7 @@ class BiEmbeddingModelCuda(torch.nn.Module):
 
 def get_model(checkpoint_path, embsize, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    model = BiEmbeddingModel(BaseModel.CODEBERT, embsize).to(device)
+    model = EmbeddingModel(BaseModel.CODEBERT, embsize).to(device)
     st2 = OrderedDict()
     for k in st.keys():
         v = st[k]
