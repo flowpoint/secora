@@ -13,7 +13,7 @@ preprocess_cores: 10
 preprocess_mode: concat
 max_input_tokens: 256
 languages:
-  - python
+  - all
 
 epochs: 2
 shards: 8

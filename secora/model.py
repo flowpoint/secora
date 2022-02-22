@@ -39,6 +39,7 @@ class EmbeddingModel(torch.nn.Module):
                 self.base_model.config.hidden_size,
                 self.embsize
                 )
+        self.dropout = torch.nn.Dropout(p=0.1)
         self.activation = torch.nn.Tanh()
 
     @property
@@ -54,6 +55,7 @@ class EmbeddingModel(torch.nn.Module):
                 **kwargs).last_hidden_state
         x = x[:, 0, :]
         x = self.pooling(x)
+        x = self.dropout(x)
         #x = self.activation(x)
         return x
 
@@ -122,14 +124,14 @@ class BiEmbeddingModelCuda(torch.nn.Module):
             return self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
 
 
-def get_model(checkpoint_path, config, device):
+def get_model(checkpoint_path, embsize, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    model = BiEmbeddingModel(config).to(device)
+    model = BiEmbeddingModel(BaseModel.CODEBERT, embsize).to(device)
     st2 = OrderedDict()
     for k in st.keys():
         v = st[k]
         #st2[k.removeprefix('module.')] = v
-        st2[k.replace('module.', '', 1)] = v
+        st2[k.replace('module.m.', '', 1)] = v
         
     model.load_state_dict(st2)
     return model

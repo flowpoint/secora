@@ -73,7 +73,7 @@ class RunNameSetting(Setting):
 
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
-        self.scheme = re.compile('(run|test|debug|profile)_\w\w*_t\d+_utc(\d)+\Z')
+        self.scheme = re.compile('(run|test|debug|profile)_[a-z][a-z0-9]*_t\d+_utc(\d)+\Z')
 
     @property
     def allowed_type(self):
@@ -212,7 +212,9 @@ def train(config, preempt_callback=None, **kwargs):
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        save_config(config.to_dict(), path)
+        with open(path, 'w') as f:
+            f.write(yaml.dump(config.to_dict()))
+
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     logger = kwargs['logger']
@@ -372,10 +374,10 @@ def training_worker(rank, config, progress, debug):
     dist.destroy_process_group()
 
 
-def clean_init():
+def clean_init(seed):
     torch.cuda.empty_cache()
-    np.random.seed(config['seed'])
-    torch.cuda.manual_seed_all(config['seed'])
+    np.random.seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(True)
 
 
@@ -385,6 +387,7 @@ if __name__ == "__main__":
     # these values override the config values if specified
     parser.add_argument('--name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
+    parser.add_argument('--max_checkpoints', type=int, default=None) 
     # 
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
@@ -407,6 +410,9 @@ if __name__ == "__main__":
     if args.batch_size is not None:
         config_candidate['batch_size'] = args.batch_size
 
+    if args.max_checkpoints is not None:
+        config_candidate['max_checkpoints'] = args.max_checkpoints
+
     for k,v in config_candidate.items():
         # parse through the settings parsing function
         config[k] = config.settings[k].parse(v)
@@ -419,7 +425,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    clean_init()
+    clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
 
     mp.set_start_method('spawn')
@@ -427,4 +433,3 @@ if __name__ == "__main__":
             args=(config, args.progress, args.debug),
             nprocs = config['num_gpus'],
             join=True)
-

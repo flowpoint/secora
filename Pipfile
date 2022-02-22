@@ -16,5 +16,6 @@ torch-sm3 = "*"
 setuptools = "==59.5.0"
 tqdm = "*"
 optuna = "*"
+more_itertools = "*"
 
 [dev-packages]

@@ -7,11 +7,11 @@ from collections import OrderedDict
 
 from more_itertools import flatten, chunked
 
-from infer import *
-from model import *
-from data import *
-import data
-from config import load_config, overwrite_config
+from .infer import *
+from .model import *
+from .data import *
+from . import data
+from .config import load_config, overwrite_config
 
 from datasets import Dataset
 
@@ -134,7 +134,6 @@ if __name__ == '__main__':
 
     #config['languages'] = ['python', 'java', 'javascript', 'php', ]
     #config['languages'] = ['all']
-    config['languages'] = ['python']
     config['model_name'] = BaseModel.CODEBERT
 
     model = get_model(checkpoint_path, config, device)

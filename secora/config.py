@@ -7,10 +7,6 @@ from abc import abstractmethod
 from abc import ABC
 from functools import wraps
 
-def check_config(config):
-    if not isinstance(config, dict):
-        raise ValueError("the passed object is not a dict")
-
 
 def load_config(path):
     ''' this verifies and translates the config yaml file 
@@ -96,8 +92,12 @@ class Setting(ABC):
         return self._name
 
     def parse(self, s):
+        ''' tries to obtain setting value from string '''
         t = self.allowed_type
         return t(str(s))
+
+    def to_dict(self):
+        return {self.name: self.value}
 
     @property
     @abstractmethod
@@ -142,9 +142,6 @@ class Setting(ABC):
 
     #def __repr__(self):
     # return f"Setting('{self._name}')"
-
-    def __repr__(self):
-        return f'{{"{self._name}": "{self._value}"}}'
 
     def __str__(self):
         return f'{{"{self._name}": "{self._value}"}}'
@@ -201,6 +198,8 @@ class IntSetting(Setting):
         self._lb = lb
         self._ub = ub
         super().__init__(name, *args, **kwargs)
+
+
 
     @property
     def allowed_type(self):
@@ -278,6 +277,10 @@ class EnumSetting(Setting):
     def parse(self, s):
         return self.enum(s)
 
+    def to_dict(self):
+        # return enum value string
+        return {self.name: self.value.value}
+
     @property
     def allowed_type(self):
         return self.enum
@@ -285,10 +288,15 @@ class EnumSetting(Setting):
     def check(self, val):
         return True
 
+
 class EnumOption(Option):
     def __init__(self, name, enum, default, lb=None, ub=None, *args, **kwargs):
         self.enum = enum
         super().__init__(name, default, *args, **kwargs)
+
+    def to_dict(self):
+        # return enum value string
+        return {self.name: self.value.value}
 
     @property
     def allowed_type(self):
@@ -393,9 +401,8 @@ class SimpleConfig:
 
     def to_dict(self):
         d = dict()
-        for k, v in self._settings.items():
-            d[k] = v.value
-
+        for s in self._settings.values():
+            d.update(s.to_dict())
         return d
 
 
