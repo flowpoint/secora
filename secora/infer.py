@@ -15,25 +15,26 @@ from .losses import mrr
 from .data import deviceloader
 
 
-def build_embedding_space(model, data_loader, config, embedding_size, feature_prefix='', device='cpu', **kwargs):
+def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', **kwargs):
     embedding_size = model.embedding_size
-
-    rank = device#dist.get_rank()
 
     batch_size = data_loader.batch_size
     dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
-    embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=rank)
+    embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=device)
 
-    show_bar = (rank == 0 or not dist.is_initialized()) and kwargs['progress'] == True
+    show_bar = (device in ['cpu', 0] or not dist.is_initialized()) and kwargs.get('progress', False) == True
 
-    if show_bar:
-        bar = tqdm(total=len(data_loader), unit=' batch', desc=f'building embeddings: {feature_prefix}', smoothing=0.03)
+    bar = tqdm(
+            total=len(data_loader), 
+            unit=' batch', 
+            desc=f'building embeddings: {feature_prefix}', 
+            smoothing=0.03,
+            disable=not show_bar)
 
-    for i, batch in enumerate(deviceloader(data_loader, rank)):
+    for i, batch in enumerate(deviceloader(data_loader, device)):
         model_inputs = (
                 batch[feature_prefix + 'input_ids'], 
-                batch[feature_prefix + 'token_type_ids'],
                 batch[feature_prefix + 'attention_mask'])
 
         #if i == 0:
@@ -44,9 +45,7 @@ def build_embedding_space(model, data_loader, config, embedding_size, feature_pr
         # because it's an bi embedding model during distributed training
         sample_embedding = sample_embedding[:,0]
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach()
-
-        if show_bar:
-            bar.update(n=1)
+        bar.update(n=1)
 
     return embedding_space
 
@@ -131,8 +130,8 @@ def validate(
 
     with model.no_sync():
         with torch.no_grad():
-            code_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=rank, **kwargs)
-            doc_embedding = build_embedding_space(model, valid_loader, config, feature_prefix='doc_', embedding_size=config['embedding_size'], device=rank, **kwargs)
+            code_embedding = build_embedding_space(model, valid_loader, feature_prefix='code_', device=rank, **kwargs)
+            doc_embedding = build_embedding_space(model, valid_loader, feature_prefix='doc_', device=rank, **kwargs)
 
             dist.barrier()
             distances, neighbors = k_nearest_neighbors(

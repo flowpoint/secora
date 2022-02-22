@@ -32,27 +32,10 @@ class LanguageSetting(Setting):
     def check(self, val_list):
         return all([x in LANGUAGES for x in val_list])
 
-def fair_truncate_old(doc, code, max_length):
-    ''' truncates two strings fairly '''
-    dlen = len(doc)
-    clen = len(code)
-    if dlen < max_length//2 and clen < max_length//2:
-        d = doc
-        c = code
-    elif not dlen < max_length//2 and not clen < max_length//2:
-        d = doc[:max_length//2]
-        c = code[:max_length//2]
-    elif not clen < max_length//2:
-        d = doc
-        c = code[:max_length-dlen]
-    else:
-        d = doc[:max_length-clen]
-        c = code
-
-    return d, c
 
 class PreprocessMode(Enum):
     CONCAT = 'concat'
+
 
 def fair_truncate(tokenizer, doc, code, max_input_tokens):
     # optimize for fair length between doc/code tokens
@@ -71,8 +54,7 @@ def fair_truncate(tokenizer, doc, code, max_input_tokens):
                 new_tr_sample,
                 padding=False, 
                 max_length=None, 
-                truncation=False, 
-                return_token_type_ids=True)
+                truncation=False)
 
 
         opt_steps += 1
@@ -99,7 +81,7 @@ def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
 
     if mode == PreprocessMode.CONCAT:
         trunc_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
-        tokenized_sample = tokenizer(trunc_sample, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
+        tokenized_sample = tokenizer(trunc_sample, padding='max_length', max_length=max_input_tokens, truncation=True)
     else:
         raise RuntimeError(f"preprocess mode: {mode} is not supported")
 
@@ -112,15 +94,11 @@ def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
 
 
 def tokenize_valid_sample(tokenizer, sample, max_input_tokens):
-    #code = batch['func_code_string']
-    #doc = [x + tokenizer.sep_token for x in batch['func_documentation_string']]
     doc = " ".join(sample['func_documentation_tokens'])
     code = " ".join(sample['func_code_tokens']) + tokenizer.sep_token
 
-    # call tokenizer twice instead of on a pair, so that its impossible to leak data between code and doc
-    # instead of the joint tokenization
-    tokenized_code = tokenizer(code, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
-    tokenized_doc = tokenizer(doc, padding='max_length', max_length=max_input_tokens, truncation=True, return_token_type_ids=True)
+    tokenized_code = tokenizer(code, padding='max_length', max_length=max_input_tokens, truncation=True)
+    tokenized_doc = tokenizer(doc, padding='max_length', max_length=max_input_tokens, truncation=True)
 
     proc_sample = dict()
 
@@ -132,18 +110,19 @@ def tokenize_valid_sample(tokenizer, sample, max_input_tokens):
 
     return proc_sample
 
+
 class DataSplit(Enum):
     TRAIN = 'train'
     VALIDATION = 'validation'
     TEST = 'test'
     EVAL = 'eval'
 
-def preprocess_split(split, config, limit_samples=None, **kwargs):
-    if not isinstance(split, DataSplit):
-        raise RuntimeError(f"invalid dataset split: {split}")
 
-    datasets.set_progress_bar_enabled(kwargs['progress'])
-    tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
+def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs):
+    datasets.set_progress_bar_enabled(kwargs.get('progress', False))
+
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
 
     num_proc = config['preprocess_cores']
 
@@ -179,18 +158,22 @@ def preprocess_split(split, config, limit_samples=None, **kwargs):
     return dataset
 
 
-def get_loader(dataset, config, **kwargs):
-    sampler = DistributedSampler(dataset, drop_last=True, shuffle=False)
+def get_loader(dataset, batch_size, workers=0, dist=False, **kwargs):
+    ''' convenience '''
+    # workers need to use the spawn or forkserver method in a distributed setting
+    if dist == True:
+        sampler = DistributedSampler(dataset, drop_last=True, shuffle=False)
+    else:
+        sampler=None
     loader = DataLoader(
             dataset, 
-            batch_size=config['batch_size'], 
+            batch_size=batch_size, 
             shuffle=False,
             drop_last=True, 
             pin_memory=True, 
-            # workers need to use the spawn or forkserver method in a distributed setting
-            num_workers=6, 
-            multiprocessing_context='spawn',
-            persistent_workers=True, 
+            num_workers=workers, 
+            #multiprocessing_context='spawn',
+            persistent_workers=workers > 0, 
             sampler=sampler)
 
     return loader

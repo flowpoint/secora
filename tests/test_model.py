@@ -3,6 +3,16 @@ import torch
 
 from secora.model import *
 
+
+class MockModel(torch.nn.Module):
+    def __init__(self, embsize):
+        super().__init__()
+        self.embedding_size = embsize
+
+    def forward(self, *args, **kwargs):
+        return torch.ones([1, 2, self.embedding_size])
+
+
 @pytest.fixture
 def get_model_inputs():
     input_ids = torch.ones([1,512], dtype=torch.int64)

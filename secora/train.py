@@ -36,6 +36,8 @@ from .infer import build_embedding_space, k_nearest_neighbors, validate
 from .losses import contrastive_loss, mrr
 from .tracking import *
 
+import datasets
+
 from SM3 import SM3
 
 TIMEOUT = datetime.timedelta(65)
@@ -126,6 +128,7 @@ def train_shard(
         train_loader,
         config,
         writer=None,
+        grad_accum=1,
         **kwargs
         ):
 
@@ -148,12 +151,12 @@ def train_shard(
             unit=' batch', 
             desc='train_shard', 
             smoothing=0.03,
-            disable=not kwargs['progress'])
+            disable=not kwargs.get('progress', False))
 
     heartbeat = time()
 
     for step, batch in enumerate(deviceloader(train_loader, rank)):
-        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
+        model_inputs = batch['input_ids'], batch['attention_mask']
 
         biemb = model(*model_inputs)
         closs = contrastive_loss(biemb[:,0], biemb[:,1], config['temp'])
@@ -170,7 +173,7 @@ def train_shard(
             heartbeat = time()
 
         # only sync before optimizer step
-        if (step+1) % kwargs['grad_accum']!= 0:
+        if (step+1) % grad_accum != 0:
             logger.debug('unsynced loss.backward')
             with model.no_sync():
                 loss.backward()
@@ -229,8 +232,8 @@ def train(config, preempt_callback=None, **kwargs):
     valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
 
     # both sets arent shuffled, shuffle train set every epoch manually
-    train_loader = get_loader(train_set, config, **kwargs)
-    valid_loader = get_loader(valid_set, config, **kwargs)
+    train_loader = get_loader(train_set, config['batch_size'], **kwargs)
+    valid_loader = get_loader(valid_set, config['batch_size'], **kwargs)
 
     logger.info('building model')
     if config['num_gpus'] > 0:
@@ -240,7 +243,7 @@ def train(config, preempt_callback=None, **kwargs):
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
-        model_inputs = batch['input_ids'], batch['token_type_ids'], batch['attention_mask']
+        model_inputs = batch['input_ids'], batch['attention_mask']
         m(*model_inputs)
         torch.cuda.synchronize()
         dist.barrier()
@@ -293,7 +296,7 @@ def train(config, preempt_callback=None, **kwargs):
             scaler=scaler,
             training_progress=training_progress)
 
-    if kwargs['debug'] == True:
+    if kwargs.get('debug',False) == True:
         num_epochs = 2
         num_shards = 2
         grad_accum = 1
@@ -321,7 +324,7 @@ def train(config, preempt_callback=None, **kwargs):
             logger.info(f'training shard: {training_progress.shard}')
 
             shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-            train_loader = get_loader(shard, config)
+            train_loader = get_loader(shard, config['batch_size'])
 
             train_shard(
                 state_tracker,
@@ -393,6 +396,7 @@ if __name__ == "__main__":
     parser.add_argument('--progress', action='store_true', default=False)
     args = parser.parse_args()
 
+
     config = TrainingConfig()
 
     with args.config_file as f:
@@ -427,6 +431,8 @@ if __name__ == "__main__":
 
     clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
+
+    datasets.set_progress_bar_enabled(args.progress)
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

@@ -46,10 +46,9 @@ class EmbeddingModel(torch.nn.Module):
     def embedding_size(self):
         return self.embsize
 
-    def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
+    def forward(self, input_ids, attention_mask, *args, **kwargs):
         x = self.base_model(
                 input_ids=input_ids, 
-                token_type_ids=token_type_ids, 
                 attention_mask=attention_mask, 
                 *args, 
                 **kwargs).last_hidden_state
@@ -68,16 +67,14 @@ class BiEmbeddingModel(torch.nn.Module):
     def embedding_size(self):
         return self.m.embedding_size
 
-    def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
-        x1 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
+    def forward(self, input_ids, attention_mask, *args, **kwargs):
+        x1 = self.m(input_ids, attention_mask, *args, **kwargs)
         if self.training == True:
-            x2 = self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
-            
-            x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
-            return x
-
+            x2 = self.m(input_ids, attention_mask, *args, **kwargs)
         else:
-            return torch.unsqueeze(x1, dim=1)
+            x2 = torch.zeros_like(x1)
+        x = torch.cat([torch.unsqueeze(x1, dim=1), torch.unsqueeze(x2, dim=1)], dim=1)
+        return x
 
 
 class AMP(Enum):
@@ -115,13 +112,13 @@ class BiEmbeddingModelCuda(torch.nn.Module):
         self.m = torch.cuda.make_graphed_callables(self.m, dummy_inputs)
         torch.cuda.synchronize()
 
-    def forward(self, input_ids, token_type_ids, attention_mask, *args, **kwargs):
+    def forward(self, input_ids, attention_mask, *args, **kwargs):
         if self.amp in [AMP.DISABLE, AMP.DEFAULT]:
             tp = {}
         else:
             tp = {'dtype': _precision_map[self.amp.value]}
         with autocast(enabled=(self.amp != AMP.DISABLE), **tp):
-            return self.m(input_ids, token_type_ids, attention_mask, *args, **kwargs)
+            return self.m(input_ids, attention_mask, *args, **kwargs)
 
 
 def get_model(checkpoint_path, embsize, device):
