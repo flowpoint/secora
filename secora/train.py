@@ -8,7 +8,7 @@ import argparse
 import datetime
 import re
 
-import pdb
+from pdb import set_trace as bp
 
 import numpy as np
 from tqdm import tqdm
@@ -37,8 +37,9 @@ from .losses import contrastive_loss, mrr
 from .tracking import *
 
 import datasets
-
 from SM3 import SM3
+
+from grad_cache.functional import cached, cat_input_tensor
 
 TIMEOUT = datetime.timedelta(65)
 
@@ -143,7 +144,26 @@ def train_shard(
     model = state_tracker['model']
     model.train()
 
+    grad_cache = True
+    if grad_cache:
+        grad_accum=1
+
     shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
+
+    @cached
+    def call_model(model, model_inputs):
+        return model(*model_inputs)
+
+    @cat_input_tensor
+    def loss_fn(x, y):
+        return contrastive_loss(x, y, temp=config['temp'])
+
+    cache_1 = []
+    cache_2 = []
+    closures_1 = []
+    closures_2 = []
+
+    cache_accum = 8
 
     if rank == 0:
         bar = tqdm(
@@ -156,29 +176,49 @@ def train_shard(
     heartbeat = time()
 
     for step, batch in enumerate(deviceloader(train_loader, rank)):
-        model_inputs = batch['input_ids'], batch['attention_mask']
+        if not grad_cache:
+            model_inputs = batch['input_ids'], batch['attention_mask']
+            emb1 = model(*model_inputs)
+            emb2 = model(*model_inputs)
+            closs = contrastive_loss(emb1, emb2, temp=config['temp'])
+            if config['amp'] == AMP.DISABLE:
+                loss = closs
+            else:
+                loss = scaler.scale(closs)
 
-        biemb = model(*model_inputs)
-        closs = contrastive_loss(biemb[:,0], biemb[:,1], config['temp'])
-        if config['amp'] != AMP.DISABLE:
-            loss = scaler.scale(closs)
+            shard_loss.add_(loss.detach())
         else:
-            loss = closs
+            model_inputs = batch['input_ids'], batch['attention_mask']
+            emb1, c1 = call_model(model, model_inputs)
+            emb2, c2 = call_model(model, model_inputs)
+            cache_1.append(emb1)
+            cache_2.append(emb2)
+            closures_1.append(c1)
+            closures_2.append(c2)
 
-        shard_loss.add_(loss.detach())
-        bar.update(n=1)
 
         if rank == 0 and time() - heartbeat > 60:
             logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {step}/{len(train_loader)}")
             heartbeat = time()
 
         # only sync before optimizer step
-        if (step+1) % grad_accum != 0:
-            logger.debug('unsynced loss.backward')
-            with model.no_sync():
-                loss.backward()
-        else:
+        if (step+1) % cache_accum == 0:
+            bar.update(n=1)
+
+            closs = loss_fn(cache_1, cache_2)
+            loss = scaler.scale(closs)
             loss.backward()
+            shard_loss.add_(loss.detach())
+            
+            for c, e in zip(closures_1, cache_1):
+                c(e)
+            for c, e in zip(closures_2, cache_2):
+                c(e)
+
+            cache_1 = []
+            cache_2 = []
+            closures_1 = []
+            closures_2 = []
 
             #gradient clipping
             if config['grad_clip'] != 0.:
@@ -237,9 +277,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     logger.info('building model')
     if config['num_gpus'] > 0:
-        m = BiEmbeddingModelCuda(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        m = EmbeddingModelCuda(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
     else:
-        m = BiEmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        m = EmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):

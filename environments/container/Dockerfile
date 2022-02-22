@@ -33,7 +33,8 @@ RUN apt update && apt-get install -y \
 #RUN git clone https://github.com/facebookresearch/faiss && cd faiss
 #RUN cmake -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=ON -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF -B build .
 
-RUN pip install faiss-cpu
-RUN pip install pipenv pytest tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools
+RUN pip install pipenv faiss-cpu pytest tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools onnx onnxruntime
+
+RUN git clone https://github.com/luyug/GradCache && cd GradCache && pip install --editable .
 
 WORKDIR /root/secora

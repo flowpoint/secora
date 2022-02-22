@@ -17,5 +17,7 @@ setuptools = "==59.5.0"
 tqdm = "*"
 optuna = "*"
 more_itertools = "*"
+onnx = "*"
+onnxruntime = "*"
 
 [dev-packages]

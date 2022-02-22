@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 import math
 
-def contrastive_loss(emb1, emb2, temp: float):
+def contrastive_loss(emb1, emb2, temp: float=0.5):
     ''' the loss used by simcse
     inspired by:
     https://github.com/princeton-nlp/SimCSE/blob/main/simcse/models.py

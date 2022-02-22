@@ -43,7 +43,8 @@ def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', *
         sample_embedding = model(*model_inputs)
 
         # because it's an bi embedding model during distributed training
-        sample_embedding = sample_embedding[:,0]
+        #sample_embedding = sample_embedding[:,0]
+        sample_embedding = sample_embedding
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach()
         bar.update(n=1)
 
