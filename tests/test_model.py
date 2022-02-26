@@ -3,14 +3,13 @@ import torch
 
 from secora.model import *
 
-
 class MockModel(torch.nn.Module):
     def __init__(self, embsize):
         super().__init__()
         self.embedding_size = embsize
 
     def forward(self, *args, **kwargs):
-        return torch.ones([1, 2, self.embedding_size])
+        return torch.ones([1, self.embedding_size])
 
 
 @pytest.fixture
@@ -38,6 +37,7 @@ def test_embeddingmodel():
 
 
 @pytest.mark.slow
+@pytest.mark.cuda
 def test_bi_embeddingmodelcuda():
     embsize = 128
 
@@ -47,7 +47,3 @@ def test_bi_embeddingmodelcuda():
     outputs = model(input_ids, attention_mask)
     assert outputs.shape == torch.Size([1, embsize])
     assert all(torch.mean(outputs, dim=-1) < 1.)
-
-
-
-
