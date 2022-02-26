@@ -163,7 +163,8 @@ def train_shard(
     closures_1 = []
     closures_2 = []
 
-    cache_accum = 8
+    #cache_accum = 64
+    cache_accum = 86
 
     if rank == 0:
         bar = tqdm(
@@ -264,16 +265,12 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        limit = 10*config['grad_accum']*config['batch_size']
+        limit = 20*config['grad_accum']*config['batch_size']
     else:
         limit = None
 
     train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=limit, **kwargs)
     valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
-
-    # both sets arent shuffled, shuffle train set every epoch manually
-    train_loader = get_loader(train_set, config['batch_size'], **kwargs)
-    valid_loader = get_loader(valid_set, config['batch_size'], **kwargs)
 
     logger.info('building model')
     if config['num_gpus'] > 0:
@@ -282,6 +279,7 @@ def train(config, preempt_callback=None, **kwargs):
         m = EmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
+    train_loader = get_loader(train_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
     for step, batch in zip(range(12), deviceloader(train_loader, rank)):
         model_inputs = batch['input_ids'], batch['attention_mask']
         m(*model_inputs)
@@ -379,7 +377,7 @@ def train(config, preempt_callback=None, **kwargs):
             logger.info(f'validating shard {training_progress.shard}')
 
             score = validate(state_tracker['model'], 
-                    valid_loader, 
+                    valid_set, 
                     config, 
                     writer, 
                     state_tracker['training_progress'],

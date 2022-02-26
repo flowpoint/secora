@@ -35,6 +35,6 @@ RUN apt update && apt-get install -y \
 
 RUN pip install pipenv faiss-cpu pytest tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools onnx onnxruntime
 
-RUN git clone https://github.com/luyug/GradCache && cd GradCache && pip install --editable .
+RUN git clone https://github.com/flowpoint/GradCache && cd GradCache && pip install --editable .
 
 WORKDIR /root/secora

@@ -16,7 +16,7 @@ languages:
   - all
 
 epochs: 2
-shards: 8
+shards: 16
 warmup_batches: 10000
 
 finetune_mode: all
