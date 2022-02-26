@@ -35,14 +35,12 @@ class EmbeddingModel(torch.nn.Module):
 
         # use [cls] pooling like simcse, because of its effectiveness
         self.embsize = embsize
-        '''
         self.pooling = torch.nn.Linear(
                 self.base_model.config.hidden_size,
                 self.embsize
                 )
-        self.dropout = torch.nn.Dropout(p=0.1)
+#        self.dropout = torch.nn.Dropout(p=0.1)
         self.activation = torch.nn.Tanh()
-        '''
 
     @property
     def embedding_size(self):
@@ -55,9 +53,9 @@ class EmbeddingModel(torch.nn.Module):
                 *args, 
                 **kwargs).last_hidden_state
         x = x[:, 0, :]
-        #x = self.pooling(x)
+        x = self.pooling(x)
         #x = self.dropout(x)
-        #x = self.activation(x)
+        x = self.activation(x)
         return x
 
 class AMP(Enum):

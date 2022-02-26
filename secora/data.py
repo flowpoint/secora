@@ -10,13 +10,15 @@ from transformers import AutoTokenizer
 from enum import Enum, auto
 from .config import Setting
 
+import numpy as np
+
 LANGUAGES = ['python',
     'java',
     'php',
     'javascript',
     'ruby',
     'go',
-    'all',]
+    ]
 
 class LanguageSetting(Setting):
     def __init__(self, name, *args, **kwargs):
@@ -30,7 +32,7 @@ class LanguageSetting(Setting):
         return list
 
     def check(self, val_list):
-        return all([x in LANGUAGES for x in val_list])
+        return val_list == ['all'] or all([x in LANGUAGES for x in val_list])
 
 
 class PreprocessMode(Enum):
@@ -131,13 +133,16 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
     else:
         dataset = load_dataset("code_search_net")[split.value]
 
+    dataset.shuffle(0)
+
     if limit_samples is not None:
         if limit_samples < 1:
             raise RuntimeError('invalid limit_samples')
-        dataset = dataset.select(range(limit_samples))
+        dataset = dataset.select(np.random.choice(np.arange(len(dataset)), size=limit_samples, replace=False))
 
-    if config['languages'] != ['all']:
-        dataset = dataset.filter(lambda x: x['language'] in config['languages'], num_proc=num_proc)
+    languages = config['languages']
+    if languages != ['all']:
+        dataset = dataset.filter(lambda x: x['language'] in languages, num_proc=num_proc)
 
     dataset = dataset.rename_column("func_code_url", "url")
 

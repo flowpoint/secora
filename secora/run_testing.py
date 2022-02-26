@@ -89,17 +89,27 @@ def main(output_dir, config_path, batches_path, checkpoint_path, device):
     testset.shuffle()
     
     scores = []
-    with open("output_dir", "w") as f:
+    with open(output_dir, "w") as f:
         f.write('begin\n')
         for chunk in tqdm(chunked(testset, 1000)):
             s = test(m, get_loader(chunk, 10), device)
             scores.append(s)
-            print(s)
             f.write(f'{s}\n')
 
         avg = sum(scores)/len(scores)
-        print(f"mrr: {avg}")
+        #print(f"mrr: {avg}")
         f.write(f'final: {avg}\n')
+
+def export_dataset(output_dir, config_path, batches_path, checkpoint_path, device):
+    m = get_model(checkpoint_path, model.BaseModel.CODEBERT, 768, device)
+
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    testset = data.preprocess_split(data.DataSplit.TEST, config, progress=True)
+    testset.shuffle()
+    testset.save_to_disk(output_dir)
+
+
     
 
 if __name__ == '__main__':
@@ -114,4 +124,5 @@ if __name__ == '__main__':
     args.run_name = 'evaluate'
 
     torch.set_num_threads(10)
-    main(args.output_dir, args.config_path, args.batches_path, args.checkpoint_path, args.device)
+    #main(args.output_dir, args.config_path, args.batches_path, args.checkpoint_path, args.device)
+    export_dataset(args.output_dir, args.config_path, args.batches_path, args.checkpoint_path, args.device)
