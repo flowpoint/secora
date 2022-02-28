@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import datasets
-from datasets import load_dataset
+from datasets import load_dataset, NamedSplitAll
 from transformers import AutoTokenizer
 from enum import Enum, auto
 from .config import Setting
@@ -134,7 +134,7 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
     num_proc = config['preprocess_cores']
 
     if split == DataSplit.EVAL:
-        dataset = load_dataset("code_search_net")['train']
+        dataset = load_dataset("code_search_net", split='all')
     else:
         dataset = load_dataset("code_search_net")[split.value]
 

@@ -15,7 +15,7 @@ def make_logger(config, debug=False, rank=-1):
     else: 
         level = logging.INFO
 
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('secora')
     logger.setLevel(level)
 
     logdir = os.path.join(config['logdir'], config['name'])

@@ -126,6 +126,11 @@ class TrainingConfig(SimpleConfig):
         for s in setts:
             self.add(s)
 
+    def parse_from_dict(self, config_candidate):
+        for k,v in config_candidate.items():
+            # parse through the settings parsing function
+            self[k] = self.settings[k].parse(v)
+
 
 def train_shard(
         state_tracker,
@@ -469,10 +474,7 @@ if __name__ == "__main__":
     if args.max_checkpoints is not None:
         config_candidate['max_checkpoints'] = args.max_checkpoints
 
-    for k,v in config_candidate.items():
-        # parse through the settings parsing function
-        config[k] = config.settings[k].parse(v)
-
+    config.parse_from_dict(config_candidate)
     config.check()
     config.final()
 

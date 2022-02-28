@@ -17,6 +17,9 @@ from secora.data import deviceloader, LANGUAGES, get_loader
 
 
 def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', output_device='cpu', **kwargs):
+    ''' the embeddings are calculated on device
+    the embedding space is collected on the output_device
+    '''
     embedding_size = model.embedding_size
 
     batch_size = data_loader.batch_size
@@ -161,7 +164,7 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
         
         relevant_ids = range(num_distractors)
         for i in range(num_chunks):
-            logger.debug('run knn no chunk: {i} embeddings')
+            logger.debug(f'run knn on chunk: {i} embeddings')
             chunk_dists, neighbors = k_nearest_neighbors(
                     c_chunks[i],
                     d_chunks[i],

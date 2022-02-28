@@ -7,11 +7,12 @@ from collections import OrderedDict
 
 from more_itertools import flatten, chunked
 
-from .infer import *
-from .model import *
-from .data import *
-from . import data
-from .config import load_config, overwrite_config
+from secora.infer import *
+from secora.models import *
+from secora.data import *
+from secora import data
+#from secora.config import load_config, overwrite_config
+from secora.train import TrainingConfig
 
 from datasets import Dataset
 
@@ -38,8 +39,8 @@ def export_predictions(preds, queries):
 
 def get_model(checkpoint_path, config, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    #model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], AMP.FP16).to(device)
     #model = EmbeddingModel(BaseModel.CODEBERT, config['embedding_size']).to(device)
+    model = EmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], config['amp']).to(device)
     st2 = OrderedDict()
 
     for k in st.keys():
@@ -70,11 +71,10 @@ def export_code_embedding(test_set, checkpoint_path, path, device, config):
 
 
     with torch.no_grad():
-        code_embedding = build_embedding_space(model, loader, config, feature_prefix='code_', embedding_size=config['embedding_size'], device=device, progress=True).to('cpu').detach().numpy()
+        code_embedding = build_embedding_space(model, loader, feature_prefix='code_', device=device, progress=True).to('cpu').detach().numpy()
    
     with open(path, 'wb') as f:
         np.save(f, code_embedding)
-
 
 
 def get_q_emb(model, query_set, config, device):
@@ -100,7 +100,7 @@ def get_q_emb(model, query_set, config, device):
             # only spawn or forkserver is supported, see torch.distributed
             persistent_workers=False)
 
-    q_emb = build_embedding_space(model, loader, config, embedding_size=config['embedding_size'], device=device, progress=True).to('cpu').detach().numpy()
+    q_emb = build_embedding_space(model, loader, device=device, progress=True).to('cpu').detach().numpy()
 
     return q_emb
 
@@ -108,7 +108,7 @@ def get_q_emb(model, query_set, config, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='evaluation utility')
     parser.add_argument('output_dir', type=str)
-    parser.add_argument('config_path', type=str)
+    parser.add_argument('config_file', type=argparse.FileType('r'))
     parser.add_argument('queries_csv', type=str)
     parser.add_argument('checkpoint_path', type=str)
     parser.add_argument('--batch_size', type=int, default=2)
@@ -126,15 +126,23 @@ if __name__ == '__main__':
         dname = 'cuda'
     else:
         dname = args.device
+
     device = torch.device(dname)
 
 
-    config = load_config(args.config_path)
-    config = overwrite_config(args, config)
+    config = TrainingConfig()
+
+    with args.config_file as f:
+        config_candidate = yaml.safe_load(f)
+
+    config.parse_from_dict(config_candidate)
+
+    #config = load_config(args.config_path)
+    #config = overwrite_config(args, config)
 
     #config['languages'] = ['python', 'java', 'javascript', 'php', ]
     #config['languages'] = ['all']
-    config['model_name'] = BaseModel.CODEBERT
+    #config['model_name'] = BaseModel.CODEBERT
 
     model = get_model(checkpoint_path, config, device)
 

@@ -1,10 +1,20 @@
 # Secora
-choose your environment:
+
+This experimental project investigates Bert trained on CodeSearchNet with the contrastive SimCSE setup.
+
+The similar model Codebert was trained for 160 GPU hours.
+Difficulty in implementing distributed computation, we could practically train for a shorter period.
+
+our latest results can be seen in [here](visualization/Screenshot from 2022-02-28 23-51-52.png):
+our previous graph, trained on just the python subset of CodeSearchNet is [here]('visualization/Screenshot from 2022-02-17 11-54-51.png)
+
+
+## environments
 
 - pipenv 
 - docker (amd gpu)
 
-### pipenv
+## pipenv
 
 ```
 # install pipenv:
@@ -22,6 +32,16 @@ python -m secora.train configs/default.yml --progress --name distilroberta
 sudo ./environments/container/run.sh
 
 python -m secora.train configs/default.yml --progress --name distilroberta
+```
+
+## show training curves
+```
+tensorboard --logdir ouput
+```
+
+## evaluate 
+```
+
 ```
 
 ## run tests:
