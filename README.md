@@ -6,6 +6,7 @@ The similar model Codebert was trained for 160 GPU hours.
 Difficulty in implementing distributed computation, we could practically train for a shorter period.
 
 our latest results can be seen in `visualization/Screenshot from 2022-02-28 23-51-52.png`
+
 our previous graph, trained on just the python subset of CodeSearchNet is `visualization/Screenshot from 2022-02-17 11-54-51.png`
 
 
