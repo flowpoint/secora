@@ -30,8 +30,8 @@ unset NCCL_IB_DISABLE=1
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
 
-pipenv run python secora/profiling.py configs/cluster.yml --modes train --run_name profile_gpu4_train24
+pipenv run python secora/profiling.py configs/cluster.yml --modes train --name profile_gpu4_train
 
-pipenv run python secora/profiling.py configs/cluster.yml --modes embedding --run_name profile_gpu4_embedding24
+pipenv run python secora/profiling.py configs/cluster.yml --modes embedding --name profile_gpu4_embedding
 
-pipenv run python secora/profiling.py configs/cluster.yml --modes validation --run_name profile_gpu4_validation24
+pipenv run python secora/profiling.py configs/cluster.yml --modes validation --name profile_gpu4_validation

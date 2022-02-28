@@ -9,11 +9,11 @@ fi
 
 if command -v docker &> /dev/null
 then
-    echo using docker;
+    echo build is using docker;
 	container_command=docker
 elif command -v podman &> /dev/null
 then
-    echo using podman;
+    echo build is using podman;
 	container_command=podman
 	
 fi

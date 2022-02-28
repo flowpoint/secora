@@ -1,11 +1,11 @@
 # Secora
-
 choose your environment:
-- pipenv
-- docker
-- modules
+
+- pipenv 
+- docker (amd gpu)
 
 ### pipenv
+
 ```
 # install pipenv:
 pip install pipenv
@@ -13,63 +13,39 @@ pip install pipenv
 pipenv shell
 # install the needed packages in the virtual environment:
 pipenv install
-```
 
-torch and faiss should be manually installed
-
-```
-# train the model with ipython:
-ipython secora/train.py
-```
-
-## run tests:
-```
-pytest tests
+python -m secora.train configs/default.yml --progress --name distilroberta
 ```
 
 ## run in container
 ```
 sudo ./environments/container/run.sh
-python -m secora.train configs/default.yml --name run_py768_0 --progress
+
+python -m secora.train configs/default.yml --progress --name distilroberta
 ```
 
-# Goals
-we want to apply and evaluate bert on code for information retrieval.
-
-- basically entry on leaderboard, with an information retrieval based model
-- presentation
-- working demo code
-- (optional) blog post publication
-
-non-goals or out of scope:
-
-- writing our own paper 
-- integration to other frameworks
-
-open design decisions:
-- how to do logging/ experiment tracking
-
+## run tests:
+```
+pytest
+pytest --runslow --runcuda
+```
 
 important papers:  
 
 - [code search net](https://arxiv.org/pdf/1909.09436.pdf)
-- [Bert](https://arxiv.org/abs/1810.04805)
 - [simCSE](https://arxiv.org/abs/2104.08821)
-- [sBert](https://arxiv.org/abs/1908.10084)
 - [codeBert](https://github.com/microsoft/CodeBERT)
 
+challenge:
 
-leaderboard:
-
-- [microsoft code challenges](https://microsoft.github.io/CodeXGLUE/)
+- [codesearchnet challenge](https://github.com/github/codesearchnet)
 
 
 implementation:
 
 - [dataset](https://huggingface.co/datasets/code_x_glue_tc_text_to_code)
-- [retrieval sBert library](https://www.sbert.net/index.html)
 - [pytorch](https://pytorch.org/docs/stable/index.html)
-
+- [faiss](https://faiss.ai/)
 
 other background information and literature:
 
@@ -87,14 +63,3 @@ existing software:
 
 - [sourcegraph](https://sourcegraph.com/search)
 - [openai codex](https://openai.com/blog/openai-codex/)
-
-
-notes:
-```
-# setup
-pip3 install pipenv
-pipenv --python 3.9.2 shell
-pipenv install
-
-pip3 install torch==1.10.1+cu111 -f https://download.pytorch.org/whl/cu111/torch_stable.html
-```

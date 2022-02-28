@@ -485,7 +485,6 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
 
     datasets.set_progress_bar_enabled(args.progress)
-    exit()
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

@@ -1,7 +1,9 @@
 logdir: "./output"
 checkpoint_dir: "./output"
 
-name: 'run_train_t0_utc1645359851'
+# the name has to follow the naming scheme
+# see secora/train.py
+name: 'run_secora_t0_utc00'
 seed: 42
 max_checkpoints: 10
 
@@ -33,6 +35,5 @@ temp: 0.05
 dropout: 0.1
 grad_clip: 0.0
 
-#embedding_size: 128
 embedding_size: 768
-top_k:  10
+top_k:  1000

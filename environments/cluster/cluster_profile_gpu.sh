@@ -29,8 +29,8 @@ unset NCCL_IB_DISABLE=1
 
 #workaround for thread-unsafe tokenizers:
 export TOKENIZERS_PARALLELISM=false
-pipenv run python secora/profiling.py configs/cluster.yml --modes train --run_name profile_cluster_train20 --batch_size 64
+pipenv run python secora/profiling.py configs/cluster.yml --modes train --name profile_cluster_train --batch_size 64
 
-pipenv run python secora/profiling.py configs/cluster.yml --modes embedding --run_name profile_cluster_embedding20 --batch_size 64
+pipenv run python secora/profiling.py configs/cluster.yml --modes embedding --name profile_cluster_embedding --batch_size 64
 
-pipenv run python secora/profiling.py configs/cluster.yml --modes validation --run_name profile_cluster_validation20 --batch_size 64
+pipenv run python secora/profiling.py configs/cluster.yml --modes validation --name profile_cluster_validation --batch_size 64

@@ -9,12 +9,9 @@ rsync -a \
     --delete-after \
     --exclude output \
     --exclude evaluation \
-    --exclude output2 \
     --exclude third_party \
     --exclude .git \
     --exclude Pipfile.lock \
     --progress \
     ../secora \
     cluster_wr0:~
-
-

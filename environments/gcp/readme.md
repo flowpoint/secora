@@ -1,7 +1,7 @@
+# Random notes about using pytorch_xla on google tpus
 following the guide (gcp tpu vm pytorch xla)[https://cloud.google.com/tpu/docs/pytorch-xla-ug-tpu-vm]
 
 install (gcloud cli)[https://cloud.google.com/sdk/docs/install]
-
 
 provision a persistent disk
 ```
@@ -51,8 +51,6 @@ gcloud alpha compute tpus tpu-vm describe tpu-name \
   --zone=zone
 ```
 
-
-
 install additional dependencies:
 ```
 pip3 install -r /usr/share/tpu/models/official/requirements.txt
@@ -82,5 +80,3 @@ export RUNTIME_VERSION=tpu-vm-pt-1.10
 
 gcloud alpha compute tpus tpu-vm delete tpu-name \
 --zone=zone
-
-
