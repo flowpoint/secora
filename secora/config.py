@@ -8,70 +8,6 @@ from abc import ABC
 from functools import wraps
 
 
-def load_config(path):
-    ''' this verifies and translates the config yaml file 
-    to a valid training setup
-    '''
-
-    with open(path, 'r') as f:
-        yconfig = yaml.safe_load(f)
-
-    check_config(yconfig)
-
-    config = dict()
-    config.update(yconfig)
-    config['learning_rate'] = float(decimal.Decimal(yconfig['learning_rate']))
-    config['optimizer'] = yconfig['optimizer']
-
-    if yconfig['num_gpus'] == 'auto':
-        config['num_gpus'] = int(torch.cuda.device_count())
-    elif torch.cuda.device_count() >= int(yconfig['num_gpus']) >= 0 and torch.cuda.is_available():
-        pass
-    else:
-        raise ValueError('requested num_gpus not available')
-
-
-    if not 'checkpoint_dir' in yconfig or yconfig['checkpoint_dir'] == "":
-        raise ValueError('checkpoint dir must be specified')
-
-    if not 'logdir' in yconfig or yconfig['logdir'] == "":
-        raise ValueError('checkpoint dir must be specified')
-
-    #if yconfig['precision'] == 'mixed' and int(config['num_gpus']) == 0:
-    #    raise RuntimeError('cant use cuda amp mixed on cpu')
-
-    if not isinstance(config['cuda_graphs'], bool):
-        raise RuntimeError('cuda_graphs has to be bool')
-
-
-    return config
-
-
-def overwrite_config(args, config):
-    if args.run_name is not None and args.run_name != "":
-        config['name'] = args.run_name
-
-    if args.batch_size is not None:
-        config['batch_size'] = args.batch_size
-
-    check_config(config)
-
-    return config
-
-def save_config(config, path):
-    with open(path, 'w') as f:
-        f.write(yaml.dump(config))
-
-
-class ConfigValueError(Exception):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-class ConfigTypeError(Exception):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-##
-
 def decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -140,9 +76,6 @@ class Setting(ABC):
         ''' to be implemented by subclasses '''
         raise NotImplementedError()
 
-    #def __repr__(self):
-    # return f"Setting('{self._name}')"
-
     def __str__(self):
         return f'{{"{self._name}": "{self._value}"}}'
 
@@ -199,8 +132,6 @@ class IntSetting(Setting):
         self._ub = ub
         super().__init__(name, *args, **kwargs)
 
-
-
     @property
     def allowed_type(self):
         return int
@@ -250,6 +181,7 @@ class FloatSetting(Setting):
         if self._ub is not None and val >= self._ub:
             return False
         return True
+
 
 class FloatOption(Option):
     def __init__(self, name, default, lb=None, ub=None, *args, **kwargs):
@@ -428,17 +360,3 @@ class SimpleConfig:
             nconf.add(v)
 
         return nconf
-
-
-
-if __name__ == "__main__":
-    desc = 'config utility, by default, checks config validity'
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('config_path', type=str)
-    args = parser.parse_args()
-
-    with open(args.config_path, 'r') as f:
-        yconfig = yaml.safe_load(f)
-
-    check_config(yconfig)
-    print('config seems valid')
