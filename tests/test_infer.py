@@ -1,16 +1,15 @@
 import pytest
 import torch
 
-from .test_model import MockModel
-from .test_data import get_mock_dataset, get_mock_processed_dataset
-
 from secora.infer import *
 from secora.data import get_loader
 
 
-def test_build_embedding():
-    m = MockModel(128)
-    dataset = get_mock_processed_dataset(mlen=100)
+@pytest.mark.embedding_size(128)
+@pytest.mark.token_per_sample(100)
+def test_build_embedding(mock_model, mock_processed_dataset):
+    m = mock_model #MockModel(128)
+    dataset = mock_processed_dataset
     dl = get_loader(dataset, batch_size=1)
     #split = preproces
     d_embs = build_embedding_space(m, dl, feature_prefix='func_')

@@ -12,8 +12,8 @@ import torch.distributed as dist
 
 from tqdm import tqdm
 
-from .losses import mrr
-from .data import deviceloader, LANGUAGES, get_loader
+from secora.losses import mrr
+from secora.data import deviceloader, LANGUAGES, get_loader
 
 
 def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', output_device='cpu', **kwargs):

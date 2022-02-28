@@ -10,53 +10,13 @@ from enum import Enum, auto
 from .config import *
 
 from collections import OrderedDict
-'''
-dropout = FloatSetting('dropout', lb=0., ub=1.)
-basemodel = EnumSetting('model_name', BaseModel)
-embedding_size = IntSetting('embedding_size', 1, 1024)
-'''
+
 
 class BaseModel(Enum):
     CODEBERT = 'microsoft/codebert-base'
+    ROBERTA = 'roberta-base'
+    DISTILROBERTA = 'distilroberta-base'
 
-#hidden_dropout_prob=config['dropout']
-class EmbeddingModel(torch.nn.Module):
-    ''' example:
-        model_name = 'bert-base-cased'
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModel.from_pretrained(model_name)
-        model = EmbeddingModel(model_name)
-        '''
-
-    def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
-        super().__init__()
-        self.base_model = AutoModelForMaskedLM.from_pretrained(
-                basemodel.value, **kwargs).base_model
-
-        # use [cls] pooling like simcse, because of its effectiveness
-        self.embsize = embsize
-        self.pooling = torch.nn.Linear(
-                self.base_model.config.hidden_size,
-                self.embsize
-                )
-#        self.dropout = torch.nn.Dropout(p=0.1)
-        self.activation = torch.nn.Tanh()
-
-    @property
-    def embedding_size(self):
-        return self.embsize
-
-    def forward(self, input_ids, attention_mask, *args, **kwargs):
-        x = self.base_model(
-                input_ids=input_ids, 
-                attention_mask=attention_mask, 
-                *args, 
-                **kwargs).last_hidden_state
-        x = x[:, 0, :]
-        x = self.pooling(x)
-        #x = self.dropout(x)
-        x = self.activation(x)
-        return x
 
 class AMP(Enum):
     FP32 = 'fp32'
@@ -71,6 +31,41 @@ _precision_map = {
         'bf16': torch.bfloat16
         }
 
+DROPOUT_SETTING = FloatSetting('dropout', lb=0., ub=1.)
+BASEMODEL_SETTING = EnumSetting('model_name', BaseModel)
+AMP_SETTING = EnumSetting('amp', AMP)
+
+
+class EmbeddingModel(torch.nn.Module):
+    def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
+        super().__init__()
+        self.base_model = AutoModelForMaskedLM.from_pretrained(
+                basemodel.value, **kwargs).base_model
+
+        # add a pooling mlp as some models don't have one
+        self.embsize = embsize
+        self.pooling = torch.nn.Linear(
+                self.base_model.config.hidden_size,
+                self.embsize
+                )
+        self.activation = torch.nn.Tanh()
+
+    @property
+    def embedding_size(self):
+        return self.embsize
+
+    def forward(self, input_ids, attention_mask, *args, **kwargs):
+        x = self.base_model(
+                input_ids=input_ids, 
+                attention_mask=attention_mask, 
+                *args, 
+                **kwargs)
+        # [cls] pooling like simcse
+        x = x.last_hidden_state[:, 0, :]
+        x = self.pooling(x)
+        x = self.activation(x)
+        return x
+
 class EmbeddingModelCuda(torch.nn.Module):
     def __init__(self, basemodel: BaseModel, embsize: int, amp: AMP, **kwargs):
         super().__init__()
@@ -83,6 +78,7 @@ class EmbeddingModelCuda(torch.nn.Module):
         return self.m.embedding_size
 
     def make_graphed(self, dummy_inputs):
+        ''' turns model into a cuda graphed model '''
         if self.is_graphed == True:
             return 
 

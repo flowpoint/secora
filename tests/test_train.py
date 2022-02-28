@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from secora.model import *
+from secora.models import *
 
 @pytest.fixture
 def get_model_inputs():

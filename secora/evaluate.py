@@ -38,7 +38,7 @@ def export_predictions(preds, queries):
 
 def get_model(checkpoint_path, config, device):
     st = torch.load(checkpoint_path, map_location=device)[0]
-    model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], AMP.FP16).to(device)
+    #model = BiEmbeddingModelCuda(BaseModel.CODEBERT, config['embedding_size'], AMP.FP16).to(device)
     #model = EmbeddingModel(BaseModel.CODEBERT, config['embedding_size']).to(device)
     st2 = OrderedDict()
 
@@ -97,7 +97,7 @@ def get_q_emb(model, query_set, config, device):
             shuffle=False,
             drop_last=False, 
             pin_memory=True, 
-            # workers need to use the spawn or forkserver method in a distributed setting
+            # only spawn or forkserver is supported, see torch.distributed
             persistent_workers=False)
 
     q_emb = build_embedding_space(model, loader, config, embedding_size=config['embedding_size'], device=device, progress=True).to('cpu').detach().numpy()

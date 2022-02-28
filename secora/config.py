@@ -1,18 +1,10 @@
-import decimal
 import torch
 import yaml
 import os
 
 from abc import abstractmethod
 from abc import ABC
-from functools import wraps
 
-
-def decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        func(*args, **kwargs)
-    return wrapper
 
 class Setting(ABC):
     def __init__(self, name, *args, **kwargs):

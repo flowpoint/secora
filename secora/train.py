@@ -27,14 +27,16 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
 
-from .model import *
+from secora.models import *
+import secora.models as models
 
-from .data import *
-from . import data
-from .config import *
-from .infer import build_embedding_space, k_nearest_neighbors, validate
-from .losses import contrastive_loss, mrr
-from .tracking import *
+from secora.data import *
+from secora import data
+from secora.config import *
+from secora.infer import build_embedding_space, k_nearest_neighbors, validate
+from secora.losses import contrastive_loss, mrr
+import secora.losses as losses #.LOSS_TEMPERATURE
+from secora.tracking import *
 
 import datasets
 from SM3 import SM3
@@ -90,7 +92,8 @@ class TrainingConfig(SimpleConfig):
     def __init__(self):
         super().__init__()
 
-        setts = [IntSetting('batch_size', lb=1),
+        setts = [
+            IntSetting('batch_size', lb=1),
             IntSetting('seed', lb=0),
             IntSetting('epochs', lb=1),
             IntSetting('shards', lb=1),
@@ -100,7 +103,7 @@ class TrainingConfig(SimpleConfig):
             IntSetting('top_k', lb=0),
             DirectorySetting('checkpoint_dir'),
             IntSetting('max_checkpoints', lb=0),
-            EnumSetting('model_name',BaseModel),
+            models.BASEMODEL_SETTING,
             FloatSetting('learning_rate', lb=0.),
             EnumSetting('finetune_mode', FinetuneMode),
             data.LanguageSetting('languages'),
@@ -108,9 +111,9 @@ class TrainingConfig(SimpleConfig):
             EnumSetting('preprocess_mode', data.PreprocessMode),
             IntSetting('max_input_tokens', lb=1),
             EnumSetting('optimizer', OptimizerEnum),
-            EnumSetting('amp', AMP),
+            models.AMP_SETTING,
             EnumSetting('lr_schedule', ScheduleEnum),
-            FloatSetting('dropout', lb=0., ub=1),
+            models.DROPOUT_SETTING,
             RunNameSetting('name'),
             IntSetting('num_gpus', lb=0),
             BoolSetting('cuda_graphs'),
@@ -164,7 +167,7 @@ def train_shard(
     closures_2 = []
 
     #cache_accum = 64
-    cache_accum = 86
+    cache_accum = 512 // config['batch_size']
 
     if rank == 0:
         bar = tqdm(
@@ -265,12 +268,14 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        limit = 20*config['grad_accum']*config['batch_size']
+        t_limit = 20*config['grad_accum']*config['batch_size']
+        v_limit = 20*config['grad_accum']*config['batch_size']
     else:
-        limit = None
+        t_limit = 200000
+        v_limit = 50000
 
-    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=limit, **kwargs)
-    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=limit, **kwargs)
+    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
 
     logger.info('building model')
     if config['num_gpus'] > 0:
@@ -354,6 +359,15 @@ def train(config, preempt_callback=None, **kwargs):
     rank = dist.get_rank()
 
     logger.info(f'starting training')
+
+    # do one validation pass with the base model
+    score = validate(state_tracker['model'], 
+            valid_set, 
+            config, 
+            writer, 
+            state_tracker['training_progress'],
+            **kwargs)
+
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
         train_set.shuffle()
@@ -471,6 +485,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
 
     datasets.set_progress_bar_enabled(args.progress)
+    exit()
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

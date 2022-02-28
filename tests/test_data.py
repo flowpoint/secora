@@ -7,28 +7,6 @@ from datasets import Dataset
 
 #sample = {'func_documentation_tokens': inputa, 'func_code_tokens', inputb}
 
-def get_mock_dataset(mlen=100):
-    d = {"url": ['u']*mlen, 
-        'func_documentation_tokens':['a']*mlen, 
-        'func_code_tokens': ['b']*mlen,
-        "language": ['python']*mlen}
-    return Dataset.from_dict(d)
-
-def get_mock_processed_dataset(mlen=100):
-    d = {"url": ['u']*mlen, 
-        'func_input_ids': [1]*mlen, 
-        'func_attention_mask': [1]*mlen,
-        'code_input_ids': [1]*mlen, 
-        'code_attention_mask': [1]*mlen,
-        "language": ['python']*mlen}
-    return Dataset.from_dict(d)
-
-
-def get_mock_train_split():
-    ds = get_mock_dataset()
-    conf = {'preprocess_cores': 1, 'languages': ['python'], 'max_input_tokens': 256, 'model_name': 'microsoft/codebert-base', 'preprocess_mode': 'concat'}
-    return preprocess_split('train', conf)
-
 
 @pytest.mark.slow
 def test_fair_truncate_both_long():

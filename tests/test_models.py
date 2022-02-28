@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from secora.model import *
+from secora.models import *
 
 class MockModel(torch.nn.Module):
     def __init__(self, embsize):
