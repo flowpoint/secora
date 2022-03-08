@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 import argparse
 import os
+import logging
 
 from tracking import make_logger
 from config import load_config, overwrite_config
@@ -38,10 +39,12 @@ def hyperopt_worker(rank, default_config, progress, debug):
     world_size = default_config['num_gpus']
 
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(65))
-    logger = make_logger(default_config, debug=debug, rank=rank)
+    make_logger(default_config, debug=debug, rank=rank)
+
+    logger = logging.getLogger('secora')
     torch.cuda.set_device(rank)
 
-    def objective(default_config, progress, debug, logger, rank, single_trial):
+    def objective(default_config, progress, debug, rank, single_trial):
         dist.barrier()
         trial = optuna.integration.TorchDistributedTrial(single_trial, rank)
 
@@ -76,11 +79,11 @@ def hyperopt_worker(rank, default_config, progress, debug):
                     run_name=config['name'])
                 writer.flush()
 
-        score = train(config, preempt_callback=callback, hparam_callback=hparam_callback, trial=trial, progress=progress, debug=debug, logger=logger)
+        score = train(config, preempt_callback=callback, hparam_callback=hparam_callback, trial=trial, progress=progress, debug=debug)
         return score
 
 
-    def obj_(single_trial): return objective(default_config, progress, debug, logger, rank, single_trial) 
+    def obj_(single_trial): return objective(default_config, progress, debug, rank, single_trial) 
 
     study = None
 

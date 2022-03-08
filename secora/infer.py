@@ -102,7 +102,7 @@ def k_nearest_neighbors(
         q_space = q_gathered.numpy().astype(np.float32)
         v_space = v_gathered.numpy().astype(np.float32)
 
-        logger = kwargs['logger']
+        logger = logging.getLogger('secora')
         logger.debug('building knn index')
         logger.debug(f'q_space: {q_space.shape}')
         logger.debug(f'v_space: {v_space.shape}')
@@ -146,7 +146,7 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
 
     torch.cuda.synchronize()
     dist.barrier()
-    logger = kwargs['logger']
+    logger = logging.getLogger('secora')#kwargs['logger']
 
 
     # run knn on cpu, it uses internal multithreading anyawy
@@ -215,7 +215,7 @@ def validate(
     model.eval()
     rank = dist.get_rank()
 
-    logger = kwargs['logger']
+    logger = logging.getLogger('secora')
 
     if config['languages'] == ['all']:
         langs = LANGUAGES

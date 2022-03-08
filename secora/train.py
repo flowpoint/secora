@@ -8,6 +8,8 @@ import argparse
 import datetime
 import re
 
+from abc import ABC
+
 from pdb import set_trace as bp
 
 import numpy as np
@@ -132,6 +134,11 @@ class TrainingConfig(SimpleConfig):
             self[k] = self.settings[k].parse(v)
 
 
+class TrainingPlan(ABC):
+    def __init__(self):
+        self.tasks = None
+
+
 def train_shard(
         state_tracker,
         train_loader,
@@ -143,7 +150,7 @@ def train_shard(
 
     rank = dist.get_rank()
 
-    logger = kwargs['logger']
+    logger = logging.getLogger('secora')
 
     optim = state_tracker['optimizer']
     scheduler = state_tracker['scheduler']
@@ -269,7 +276,7 @@ def train(config, preempt_callback=None, **kwargs):
 
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
-    logger = kwargs['logger']
+    logger = logging.getLogger('secora')
     logger.info('started train function')
 
     if kwargs['debug'] == True:
@@ -337,7 +344,6 @@ def train(config, preempt_callback=None, **kwargs):
             config['name'],
             config['logdir'],
             config['max_checkpoints'],
-            logger,
             model=model,
             optimizer=optim,
             scheduler=scheduler,
@@ -425,7 +431,9 @@ def training_worker(rank, config, progress, debug):
 
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
-    logger = make_logger(config, debug=debug, rank=rank)
+    make_logger(config, debug=debug, rank=rank)
+    logger = logging.getLogger('secora')
+
     torch.cuda.set_device(rank)
     train(config, progress=progress, debug=debug, logger=logger)
 

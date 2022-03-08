@@ -8,15 +8,21 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-
+# give every worker its own logs, 1 per run, 1 over the worker lifecycle
 def make_logger(config, debug=False, rank=-1):
+    # call this only once per training run during worker setup 
     if debug == True:
         level = logging.DEBUG
     else: 
         level = logging.INFO
 
     logger = logging.getLogger('secora')
+
+    if logger.hasHandlers() == True:
+        RuntimeError('logger already has handlers, make logger should only be called once')
+
     logger.setLevel(level)
+    logger.addFilter(DistFilter(rank=rank))
 
     logdir = os.path.join(config['logdir'], config['name'])
     checkdir = os.path.join(config['checkpoint_dir'], config['name'])
@@ -24,27 +30,35 @@ def make_logger(config, debug=False, rank=-1):
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    path = os.path.join(config['logdir'], config['name'], 'run.log')
+    path = os.path.join(config['logdir'], config['name'], f'worker_{rank}.log')
 
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()
 
-    rank_str = f'rank_{rank}'
-
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - ' + rank_str + ' - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(rank)s - %(message)s')
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
-
-    if logger.hasHandlers() == False:
-        logger.addHandler(fh)
-        logger.addHandler(ch)
+    logger.addHandler(fh)
+    logger.addHandler(ch)
 
     return logger
 
+class DistFilter(logging.Filter):
+    def __init__(self, *args, rank=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if rank is None:
+            raise RuntimeError('rank argument cant be None')
+        self.rank = rank
+
+    def filter(self, record):
+        record.rank = str(self.rank)
+        return True
+
 
 class StateTracker:
-    def __init__(self, name, logdir, max_checkpoints, logger, **kwargs):
+    def __init__(self, name, logdir, max_checkpoints, **kwargs):
         if not max_checkpoints >= 0:
             raise RuntimeError('max_checkpoints has to be positive')
 
@@ -52,7 +66,7 @@ class StateTracker:
         os.makedirs(self.run_logdir, exist_ok=True)
         self.max_checkpoints = max_checkpoints
 
-        self.logger = logger
+        self.logger = logging.getLogger('secora')
 
         if self.max_checkpoints == 0:
             self.logger.warning("max_checkpoints is 0, no checkpoints will be saved")
@@ -94,8 +108,6 @@ class StateTracker:
             os.remove(old_path)
 
     def load_latest(self):
-        self.logger = logging.getLogger(__name__)
-
         existing_checkpoints = sorted(self._list_checkpoints())
         if len(existing_checkpoints) < 1:
             self.logger.info('no checkpoints available, not loading anything')
