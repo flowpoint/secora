@@ -29,8 +29,8 @@ optimizer: adam
 lr_schedule: constant
 
 learning_rate: 1e-5
-batch_size: 8
-grad_accum: 64 # counted in batches
+batch_size: 512
+grad_accum: 1 # counted in batches
 temp: 0.05
 dropout: 0.1
 grad_clip: 0.0

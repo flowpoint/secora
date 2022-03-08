@@ -126,6 +126,7 @@ def k_nearest_neighbors(
     else:
         return None, None
 
+DEVICE_BATCHSIZE = 6
 
 def validate_lang(model, lang, valid_set, config, writer, training_progress, num_distractors=1000, **kwargs):
     embsize = model.embedding_size
@@ -136,7 +137,7 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
         raise RuntimeError(f'not enough samples for validating, got {len(lang_set)} but needs atleasts {num_distractors}')
     rank = dist.get_rank()
 
-    loader = get_loader(lang_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
+    loader = get_loader(lang_set, DEVICE_BATCHSIZE, workers=0, dist=dist.is_initialized(), **kwargs)
 
     c_emb = build_embedding_space(model, loader, feature_prefix='code_', device=rank, **kwargs)
     d_emb = build_embedding_space(model, loader, feature_prefix='doc_', device=rank, **kwargs)

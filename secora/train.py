@@ -7,6 +7,7 @@ from math import ceil
 import argparse
 import datetime
 import re
+from contextlib import contextmanager
 
 from abc import ABC
 
@@ -44,6 +45,8 @@ import datasets
 from SM3 import SM3
 
 from grad_cache.functional import cached, cat_input_tensor
+
+DEVICE_BATCHSIZE = 6
 
 TIMEOUT = datetime.timedelta(65)
 
@@ -134,9 +137,163 @@ class TrainingConfig(SimpleConfig):
             self[k] = self.settings[k].parse(v)
 
 
-class TrainingPlan(ABC):
+class TrainingPlan:
     def __init__(self):
-        self.tasks = None
+        self.tasks = []
+
+    def add_task(self, task):
+        pass
+
+    def run(self):
+        for t in self.tasks:
+            t.run()
+
+
+
+def get_heartbeat():
+    heartbeat = time()
+    rank = dist.get_rank()
+
+    @contextmanager
+    def heartbeat():
+        yield
+
+    return heartbeat
+
+def train_step(model_inputs, cache, shard_loss, state_tracker, config, writer, **kwargs):
+    rank = dist.get_rank()
+
+    scaler = state_tracker['scaler']
+    optim = state_tracker['optimizer']
+    scheduler = state_tracker['scheduler']
+    model = state_tracker['model']
+    model.train()
+
+    training_progress = state_tracker['training_progress']
+    step = training_progress.batch
+    
+    cache_accum = config['batch_size'] // DEVICE_BATCHSIZE
+
+    grad_cache = True
+    if grad_cache:
+        grad_accum=1
+
+    if not grad_cache:
+        emb1 = model(*model_inputs)
+        emb2 = model(*model_inputs)
+        closs = contrastive_loss(emb1, emb2, temp=config['temp'])
+        if config['amp'] == AMP.DISABLE:
+            loss = closs
+        else:
+            loss = scaler.scale(closs)
+
+        shard_loss.add_(loss.detach())
+    else:
+        emb1, c1 = cache.call_model(model, model_inputs)
+        emb2, c2 = cache.call_model(model, model_inputs)
+        cache.cache_1.append(emb1)
+        cache.cache_2.append(emb2)
+        cache.closures_1.append(c1)
+        cache.closures_2.append(c2)
+
+    # only sync before optimizer step
+    if (step+1) % cache_accum == 0:
+
+        closs = cache.loss_fn(cache.cache_1, cache.cache_2)
+        loss = scaler.scale(closs)
+        loss.backward()
+        shard_loss.add_(loss.detach())
+        
+        for c, e in zip(cache.closures_1, cache.cache_1):
+            c(e)
+        for c, e in zip(cache.closures_2, cache.cache_2):
+            c(e)
+
+        cache.reset()
+
+        #gradient clipping
+        if config['grad_clip'] != 0.:
+            scaler.unscale_(optim)
+            clip_grad_norm_(
+                    model.parameters(), 
+                    max_norm=config['grad_clip'])
+
+        if config['amp'] != AMP.DISABLE:
+            scaler.step(optim)
+            scaler.update()
+        else:
+            optim.step()
+
+        scheduler.step()
+        training_progress.optimizer_step += 1
+        training_progress.batch += 1
+
+        if rank == 0:
+            writer.add_scalar("learning_rate/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
+            writer.flush()
+
+        optim.zero_grad(set_to_none=True)
+
+
+class GCache:
+    def __init__(self, temp):
+        self.temp = temp
+
+        self.cache_1: list = []
+        self.cache_2: list = []
+        self.closures_1: list = []
+        self.closures_2: list = []
+
+    def reset(self):
+        self.cache_1 = []
+        self.cache_2 = []
+        self.closures_1 = []
+        self.closures_2 = []
+
+    @cached
+    def call_model(self, model, model_inputs):
+        return model(*model_inputs)
+
+    @cat_input_tensor
+    def loss_fn(self, x, y):
+        return contrastive_loss(x, y, temp=self.temp)
+
+class ProgressDisplay:
+    ''' logs the livelyness and progress of a training task '''
+
+    def __init__(self, training_progress, len_, **kwargs):
+        self.rank = dist.get_rank()
+        self.heartbeat = time()
+        self.training_progress = training_progress
+
+        show_bar = kwargs.get('progress', False) and self.rank == 0
+        print('--------')
+        print(len_)
+        print('--------')
+
+        self.bar = tqdm(
+            total=len_,
+            unit=' batch', 
+            desc='train_shard', 
+            smoothing=0.03,
+            disable=not show_bar)
+
+
+    def update(self):
+        if self.rank == 0 and time() - self.heartbeat > 10:
+            self.bar.clear()
+            e = self.training_progress.epoch
+            s = self.training_progress.shard
+            #b = training_progress.shard
+            batch = self.training_progress.batch
+            logger = logging.getLogger('secora')
+            logger.info(f"heartbeat: training: epoch: {e} shard: {s} batch: {batch}")
+            self.heartbeat = time()
+
+        self.bar.update(n=1)
+
+    def reset(self):
+        self.bar.reset()
 
 
 def train_shard(
@@ -149,125 +306,42 @@ def train_shard(
         ):
 
     rank = dist.get_rank()
-
     logger = logging.getLogger('secora')
-
-    optim = state_tracker['optimizer']
-    scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
-    scaler = state_tracker['scaler']
-    model = state_tracker['model']
-    model.train()
 
-    grad_cache = True
-    if grad_cache:
-        grad_accum=1
+    cache = GCache(config['temp'])
 
-    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
+    shard_loss = torch.tensor(
+            [0.], 
+            device=rank, 
+            dtype=torch.float64, 
+            requires_grad=False)
 
-    @cached
-    def call_model(model, model_inputs):
-        return model(*model_inputs)
+    for batch in deviceloader(train_loader, rank):
+        model_inputs = batch['input_ids'], batch['attention_mask']
+        train_step(
+                model_inputs, 
+                cache,
+                shard_loss,
+                state_tracker,
+                config,
+                writer,
+                **kwargs
+                )
+        kwargs['display'].update()
 
-    @cat_input_tensor
-    def loss_fn(x, y):
-        return contrastive_loss(x, y, temp=config['temp'])
-
-    cache_1 = []
-    cache_2 = []
-    closures_1 = []
-    closures_2 = []
-
-    #cache_accum = 64
-    cache_accum = 512 // config['batch_size']
-
-    if rank == 0:
-        bar = tqdm(
-            total=len(train_loader), 
-            unit=' batch', 
-            desc='train_shard', 
-            smoothing=0.03,
-            disable=not kwargs.get('progress', False))
-
-    heartbeat = time()
-
-    for step, batch in enumerate(deviceloader(train_loader, rank)):
-        if not grad_cache:
-            model_inputs = batch['input_ids'], batch['attention_mask']
-            emb1 = model(*model_inputs)
-            emb2 = model(*model_inputs)
-            closs = contrastive_loss(emb1, emb2, temp=config['temp'])
-            if config['amp'] == AMP.DISABLE:
-                loss = closs
-            else:
-                loss = scaler.scale(closs)
-
-            shard_loss.add_(loss.detach())
-        else:
-            model_inputs = batch['input_ids'], batch['attention_mask']
-            emb1, c1 = call_model(model, model_inputs)
-            emb2, c2 = call_model(model, model_inputs)
-            cache_1.append(emb1)
-            cache_2.append(emb2)
-            closures_1.append(c1)
-            closures_2.append(c2)
-
-
-        if rank == 0 and time() - heartbeat > 60:
-            logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {step}/{len(train_loader)}")
-            heartbeat = time()
-
-        # only sync before optimizer step
-        if (step+1) % cache_accum == 0:
-            bar.update(n=1)
-
-            closs = loss_fn(cache_1, cache_2)
-            loss = scaler.scale(closs)
-            loss.backward()
-            shard_loss.add_(loss.detach())
-            
-            for c, e in zip(closures_1, cache_1):
-                c(e)
-            for c, e in zip(closures_2, cache_2):
-                c(e)
-
-            cache_1 = []
-            cache_2 = []
-            closures_1 = []
-            closures_2 = []
-
-            #gradient clipping
-            if config['grad_clip'] != 0.:
-                scaler.unscale_(optim)
-                clip_grad_norm_(
-                        model.parameters(), 
-                        max_norm=config['grad_clip'])
-
-            if config['amp'] != AMP.DISABLE:
-                scaler.step(optim)
-                scaler.update()
-            else:
-                optim.step()
-
-            scheduler.step()
-            training_progress.optimizer_step += 1
-            if rank == 0:
-                writer.add_scalar("learning_rate/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
-                writer.flush()
-
-            optim.zero_grad(set_to_none=True)
+    kwargs['display'].reset()
 
     dist.all_reduce(shard_loss)
     torch.cuda.synchronize()
     dist.barrier()
     if rank == 0:
-        avg_loss = shard_loss.cpu().numpy()/step
+        avg_loss = shard_loss.cpu().numpy() / len(train_loader)
         writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         writer.flush()
 
 
 def train(config, preempt_callback=None, **kwargs):
-    #check_config(config)
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
@@ -280,8 +354,8 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        t_limit = 20*config['grad_accum']*config['batch_size']
-        v_limit = 20*config['grad_accum']*config['batch_size']
+        t_limit = 20*config['batch_size']
+        v_limit = 20*3000#DEVICE_BATCHSIZE
     else:
         t_limit = 200000
         v_limit = 50000
@@ -322,8 +396,9 @@ def train(config, preempt_callback=None, **kwargs):
 
     optim = _optimizer_mapping[config['optimizer'].value](params, lr=config['learning_rate'])
 
-    num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
-    num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
+    num_warmup_steps = config['warmup_batches']
+    num_training_steps_per_epoch = ceil(len(train_set) / config['batch_size'])
+    num_steps_per_shard = num_training_steps_per_epoch // config['shards']
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
 
     if config['lr_schedule'] == ScheduleEnum.LINEAR:
@@ -340,6 +415,8 @@ def train(config, preempt_callback=None, **kwargs):
     scaler = GradScaler()
 
     training_progress = TrainingProgress()
+    display = ProgressDisplay(training_progress, num_steps_per_shard, **kwargs)
+
     state_tracker = StateTracker(
             config['name'],
             config['logdir'],
@@ -395,6 +472,7 @@ def train(config, preempt_callback=None, **kwargs):
                 config,
                 writer,
                 grad_accum=grad_accum,
+                display=display,
                 **kwargs
                 )
 
