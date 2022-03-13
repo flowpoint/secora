@@ -14,7 +14,6 @@ from abc import ABC
 from pdb import set_trace as bp
 
 import numpy as np
-from tqdm import tqdm
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -44,7 +43,7 @@ from secora.tracking import *
 import datasets
 from SM3 import SM3
 
-from grad_cache.functional import cached, cat_input_tensor
+from train_utils import GDCache, ProgressDisplay
 
 DEVICE_BATCHSIZE = 6
 
@@ -142,23 +141,13 @@ class TrainingPlan:
         self.tasks = []
 
     def add_task(self, task):
+        #self.tasks.append(task)
         pass
 
     def run(self):
         for t in self.tasks:
             t.run()
 
-
-
-def get_heartbeat():
-    heartbeat = time()
-    rank = dist.get_rank()
-
-    @contextmanager
-    def heartbeat():
-        yield
-
-    return heartbeat
 
 def train_step(model_inputs, cache, shard_loss, state_tracker, config, writer, **kwargs):
     rank = dist.get_rank()
@@ -233,67 +222,6 @@ def train_step(model_inputs, cache, shard_loss, state_tracker, config, writer, *
             writer.flush()
 
         optim.zero_grad(set_to_none=True)
-
-
-class GCache:
-    def __init__(self, temp):
-        self.temp = temp
-
-        self.cache_1: list = []
-        self.cache_2: list = []
-        self.closures_1: list = []
-        self.closures_2: list = []
-
-    def reset(self):
-        self.cache_1 = []
-        self.cache_2 = []
-        self.closures_1 = []
-        self.closures_2 = []
-
-    @cached
-    def call_model(self, model, model_inputs):
-        return model(*model_inputs)
-
-    @cat_input_tensor
-    def loss_fn(self, x, y):
-        return contrastive_loss(x, y, temp=self.temp)
-
-class ProgressDisplay:
-    ''' logs the livelyness and progress of a training task '''
-
-    def __init__(self, training_progress, len_, **kwargs):
-        self.rank = dist.get_rank()
-        self.heartbeat = time()
-        self.training_progress = training_progress
-
-        show_bar = kwargs.get('progress', False) and self.rank == 0
-        print('--------')
-        print(len_)
-        print('--------')
-
-        self.bar = tqdm(
-            total=len_,
-            unit=' batch', 
-            desc='train_shard', 
-            smoothing=0.03,
-            disable=not show_bar)
-
-
-    def update(self):
-        if self.rank == 0 and time() - self.heartbeat > 10:
-            self.bar.clear()
-            e = self.training_progress.epoch
-            s = self.training_progress.shard
-            #b = training_progress.shard
-            batch = self.training_progress.batch
-            logger = logging.getLogger('secora')
-            logger.info(f"heartbeat: training: epoch: {e} shard: {s} batch: {batch}")
-            self.heartbeat = time()
-
-        self.bar.update(n=1)
-
-    def reset(self):
-        self.bar.reset()
 
 
 def train_shard(
@@ -538,7 +466,6 @@ if __name__ == "__main__":
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
     args = parser.parse_args()
-
 
     config = TrainingConfig()
 
