@@ -25,5 +25,5 @@ $container_command run -it --rm \
     --cap-add=SYS_PTRACE \
     --security-opt seccomp=unconfined \
     -v /home/fast4/huggingface:/root/.cache/huggingface:z \
-    -v /home/fast4/secora:/root/secora:z \
+    -v ../secora:/root/secora:z \
     flowpoint/secora_dev /bin/bash

@@ -1,10 +1,12 @@
 from grad_cache.functional import cached, cat_input_tensor
 from tqdm import tqdm
 from time import time
+import logging
 
 class GCache:
-    def __init__(self, temp):
+    def __init__(self, temp, loss_fn_):
         self.temp = temp
+        self.loss_fn_ = loss_fn_
 
         self.cache_1: list = []
         self.cache_2: list = []
@@ -23,18 +25,18 @@ class GCache:
 
     @cat_input_tensor
     def loss_fn(self, x, y):
-        return contrastive_loss(x, y, temp=self.temp)
+        return self.loss_fn_(x, y, temp=self.temp)
 
 
 class ProgressDisplay:
     ''' logs the livelyness and progress of a training task '''
 
-    def __init__(self, training_progress, len_, **kwargs):
-        self.rank = dist.get_rank()
+    def __init__(self, training_progress, len_, enabled, **kwargs):
+        self.enabled = enabled
         self.heartbeat = time()
         self.training_progress = training_progress
 
-        show_bar = kwargs.get('progress', False) and self.rank == 0
+        show_bar = kwargs.get('progress', False) and self.enabled == 0
         print('--------')
         print(len_)
         print('--------')
@@ -46,9 +48,8 @@ class ProgressDisplay:
             smoothing=0.03,
             disable=not show_bar)
 
-
     def update(self):
-        if self.rank == 0 and time() - self.heartbeat > 10:
+        if self.enabled and time() - self.heartbeat > 10:
             self.bar.clear()
             e = self.training_progress.epoch
             s = self.training_progress.shard

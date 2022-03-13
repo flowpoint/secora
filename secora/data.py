@@ -1,16 +1,18 @@
+from enum import Enum, auto
 from itertools import cycle
 
-import torch
+import numpy as np
+
+import torch.Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import datasets
 from datasets import load_dataset, NamedSplitAll
 from transformers import AutoTokenizer
-from enum import Enum, auto
-from .config import Setting
 
-import numpy as np
+from secora.config import Setting
+
 
 LANGUAGES = ['python',
     'java',

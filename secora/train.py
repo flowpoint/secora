@@ -1,49 +1,35 @@
 import os
-import time
-from time import time
-from enum import Enum, auto
-
 from math import ceil
-import argparse
+from time import time
 import datetime
-import re
-from contextlib import contextmanager
-
+from enum import Enum, auto
 from abc import ABC
-
-from pdb import set_trace as bp
+import re
+import argparse
 
 import numpy as np
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 from torch.nn.utils import clip_grad_norm_
 from torch.cuda.amp import autocast, GradScaler
-from torch.optim import lr_scheduler
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
+from SM3 import SM3
 
 from secora.models import *
 import secora.models as models
 
-from secora.data import *
 from secora import data
+from secora.tracking import *
 from secora.config import *
 from secora.infer import build_embedding_space, k_nearest_neighbors, validate
-from secora.losses import contrastive_loss, mrr
-import secora.losses as losses #.LOSS_TEMPERATURE
-from secora.tracking import *
-
-import datasets
-from SM3 import SM3
-
-from train_utils import GDCache, ProgressDisplay
+from secora.train_utils import GCache, ProgressDisplay
+from secora.losses import contrastive_loss
 
 DEVICE_BATCHSIZE = 6
 
@@ -91,6 +77,7 @@ class RunNameSetting(Setting):
     def check(self, val):
         matched = self.scheme.match(val) is not None
         return matched
+
 
 class TrainingConfig(SimpleConfig):
     def __init__(self):
@@ -216,12 +203,15 @@ def train_step(model_inputs, cache, shard_loss, state_tracker, config, writer, *
         scheduler.step()
         training_progress.optimizer_step += 1
         training_progress.batch += 1
+        optim.zero_grad(set_to_none=True)
 
         if rank == 0:
-            writer.add_scalar("learning_rate/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
+            writer.add_scalar(
+                    "learning_rate/train", 
+                    scheduler.get_last_lr()[0], 
+                    training_progress.optimizer_step)
             writer.flush()
 
-        optim.zero_grad(set_to_none=True)
 
 
 def train_shard(
@@ -237,12 +227,12 @@ def train_shard(
     logger = logging.getLogger('secora')
     training_progress = state_tracker['training_progress']
 
-    cache = GCache(config['temp'])
+    cache = GCache(config['temp'], contrastive_loss)
 
     shard_loss = torch.tensor(
-            [0.], 
-            device=rank, 
-            dtype=torch.float64, 
+            [0.],
+            device=rank,
+            dtype=torch.float64,
             requires_grad=False)
 
     for batch in deviceloader(train_loader, rank):
@@ -288,18 +278,24 @@ def train(config, preempt_callback=None, **kwargs):
         t_limit = 200000
         v_limit = 50000
 
-    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
-    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+    train_set = data.preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+    valid_set = data.preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
 
     logger.info('building model')
     if config['num_gpus'] > 0:
-        m = EmbeddingModelCuda(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        mclass = EmbeddingModelCuda
     else:
-        m = EmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
+        mclass = EmbeddingModel
+
+    m = mclass(
+            config['model_name'], 
+            config['embedding_size'], 
+            config['amp'], 
+            hidden_dropout_prob=config['dropout']).to(rank)
 
     logger.info('warming up cuda benchmark')
-    train_loader = get_loader(train_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
-    for step, batch in zip(range(12), deviceloader(train_loader, rank)):
+    train_loader = data.get_loader(train_set, DEVICE_BATCHSIZE, workers=0, dist=dist.is_initialized(), **kwargs)
+    for step, batch in zip(range(12), data.deviceloader(train_loader, rank)):
         model_inputs = batch['input_ids'], batch['attention_mask']
         m(*model_inputs)
         torch.cuda.synchronize()
@@ -343,7 +339,7 @@ def train(config, preempt_callback=None, **kwargs):
     scaler = GradScaler()
 
     training_progress = TrainingProgress()
-    display = ProgressDisplay(training_progress, num_steps_per_shard, **kwargs)
+    display = ProgressDisplay(training_progress, num_steps_per_shard, enabled=rank == 0, **kwargs)
 
     state_tracker = StateTracker(
             config['name'],
@@ -462,7 +458,6 @@ if __name__ == "__main__":
     parser.add_argument('--name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--max_checkpoints', type=int, default=None) 
-    # 
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
     args = parser.parse_args()
@@ -492,14 +487,12 @@ if __name__ == "__main__":
     config.final()
 
     logdir = os.path.join(config['logdir'], config['name'])
-    checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
+    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
     clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
-
-    datasets.set_progress_bar_enabled(args.progress)
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 
