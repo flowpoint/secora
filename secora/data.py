@@ -3,7 +3,7 @@ from itertools import cycle
 
 import numpy as np
 
-import torch.Tensor
+from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -202,6 +202,6 @@ def deviceloader(loader, device):
     ''' wraps iterable to load samples to device'''
     for b in loader:
         for k, v in b.items():
-            if isinstance(v, torch.Tensor):
+            if isinstance(v, Tensor):
                 b[k] = v.to(device)
         yield b
