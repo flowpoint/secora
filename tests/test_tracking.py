@@ -25,6 +25,7 @@ class TestTracker:
     logger = MockLogger()
 
     def test_checkpoint_count(self):
+        checkpoint_id = 111
         model = MockModel()
         for i in [0,1,10]:
             with tempfile.TemporaryDirectory() as tmpdirname:
@@ -35,15 +36,16 @@ class TestTracker:
                 for k in range(0, i):
                     files = os.listdir(path)
                     assert files == tracker._list_checkpoints()
-                    tracker.save()
+                    tracker.save(checkpoint_id)
 
                 for k2 in range(0,10):
                     files = os.listdir(path)
-                    tracker.save()
+                    tracker.save(checkpoint_id)
                     assert len(files) <= i
 
     def test_restore(self):
         model = MockModel()
+        checkpoint_id = 111
         with tempfile.TemporaryDirectory() as tmpdirname:
             tracker = StateTracker(name='model', logdir=tmpdirname, max_checkpoints=1, model=model)
             
@@ -51,7 +53,7 @@ class TestTracker:
             assert os.listdir(path) == []
 
             model.state['key1'] = "value2"
-            tracker.save()
+            tracker.save(checkpoint_id)
 
             model2 = MockModel()
             tracker2 = StateTracker(name='model', logdir=tmpdirname, max_checkpoints=1, model=model2)
