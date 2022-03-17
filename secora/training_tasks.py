@@ -252,28 +252,8 @@ def train_shard(
         writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         writer.flush()
 
-
-def train(config, preempt_callback=None, **kwargs):
-    rank = dist.get_rank()
-    if rank == 0:
-        path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        with open(path, 'w') as f:
-            f.write(yaml.dump(config.to_dict()))
-
-        writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-
+def setup_model(config, rank, train_set, **kwargs):
     logger = logging.getLogger('secora')
-    logger.info('started train function')
-
-    if kwargs['debug'] == True:
-        t_limit = 20*config['batch_size']
-        v_limit = 20*3000#DEVICE_BATCHSIZE
-    else:
-        t_limit = 200000
-        v_limit = 50000
-
-    train_set = data.preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
-    valid_set = data.preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
 
     logger.info('building model')
     if config['num_gpus'] > 0:
@@ -306,6 +286,84 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info('building DDP model')
     model = DDP(m, device_ids=[rank], find_unused_parameters=True)
     model.embedding_size = m.embedding_size
+    return model
+
+
+def training_plan(state_tracker, train_set, valid_set, config, writer, num_epochs, num_shards, grad_accum, **kwargs, display):
+    rank = dist.get_rank()
+    logger = logging.getLogger('secora')
+    logger.info(f'starting training')
+
+    training_progress = state_tracker['training_progress']
+
+    # do one validation pass with the base model
+
+    # -----------
+    score = validate(state_tracker['model'], 
+            valid_set, 
+            config, 
+            writer, 
+            state_tracker['training_progress'],
+            **kwargs)
+
+    while(training_progress.epoch < num_epochs):
+        logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
+        train_set.shuffle()
+
+        while(training_progress.shard < num_shards):
+            logger.info(f'training shard: {training_progress.shard}')
+            shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
+            train_loader = data.get_loader(shard, config['batch_size'])
+
+            train_shard(
+                state_tracker,
+                train_loader,
+                config,
+                writer,
+                grad_accum=grad_accum,
+                display=display,
+                **kwargs
+                )
+
+            logger.info(f'validating shard {training_progress.shard}')
+
+            score = validate(state_tracker['model'], 
+                    valid_set, 
+                    config, 
+                    writer, 
+                    state_tracker['training_progress'],
+                    **kwargs)
+
+            training_progress.shard_done()
+            torch.cuda.synchronize()
+            dist.barrier()
+
+            checkpoint_id = ceil(time.time())
+            if rank == 0:
+                state_tracker.save(checkpoint_id)
+
+        training_progress.epoch_done()
+
+def training_setup(config, **kwargs):
+    rank = dist.get_rank()
+    if rank == 0:
+        path = os.path.join(config['logdir'], config['name'], 'config.yml')
+        with open(path, 'w') as f:
+            f.write(yaml.dump(config.to_dict()))
+
+        writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+
+    logger = logging.getLogger('secora')
+    logger.info('started train function')
+
+    if kwargs['debug'] == True:
+        t_limit = 20*config['batch_size']
+        v_limit = 20*3000#DEVICE_BATCHSIZE
+
+    train_set = data.preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+    valid_set = data.preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+    
+    model = setup_model(config, rank, train_set, **kwargs)
 
     if config['finetune_mode'] == FinetuneMode.ALL:
         params = model.parameters()
@@ -331,7 +389,6 @@ def train(config, preempt_callback=None, **kwargs):
                 )
 
     scaler = GradScaler()
-
     training_progress = TrainingProgress()
     display = ProgressDisplay(training_progress, num_steps_per_shard, enabled=rank == 0, **kwargs)
 
@@ -345,7 +402,7 @@ def train(config, preempt_callback=None, **kwargs):
             scaler=scaler,
             training_progress=training_progress)
 
-    if kwargs.get('debug',False) == True:
+    if kwargs.get('debug', False) == True:
         num_epochs = 2
         num_shards = 2
         grad_accum = 1
@@ -362,61 +419,9 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info(f'shard_size: {len(train_set)/num_shards} samples')
     logger.info(f'validation set size: {len(valid_set)} samples')
 
-    rank = dist.get_rank()
+    return state_tracker, train_set, valid_set, config, writer, num_epochs, num_shards, display
 
-    logger.info(f'starting training')
+def train(config, **kwargs):
+    t_args = training_setup(config, **kwargs)
+    training_plan(*t_args, **kwargs)
 
-    # do one validation pass with the base model
-    score = validate(state_tracker['model'], 
-            valid_set, 
-            config, 
-            writer, 
-            state_tracker['training_progress'],
-            **kwargs)
-
-    while(training_progress.epoch < num_epochs):
-        logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
-        train_set.shuffle()
-
-        while(training_progress.shard < num_shards):
-            logger.info(f'training shard: {training_progress.shard}')
-
-            shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-            train_loader = get_loader(shard, config['batch_size'])
-
-            train_shard(
-                state_tracker,
-                train_loader,
-                config,
-                writer,
-                grad_accum=grad_accum,
-                display=display,
-                **kwargs
-                )
-
-
-            logger.info(f'validating shard {training_progress.shard}')
-
-            score = validate(state_tracker['model'], 
-                    valid_set, 
-                    config, 
-                    writer, 
-                    state_tracker['training_progress'],
-                    **kwargs)
-
-            training_progress.shard_done()
-
-            torch.cuda.synchronize()
-            dist.barrier()
-            if rank == 0:
-                state_tracker.save()
-
-            if 'preempt_callback' in kwargs:
-                kwargs['preempt_callback'](state_tracker, score, config, **kwargs)
-
-        training_progress.epoch_done()
-
-    if 'hparam_callback' in kwargs and rank == 0:
-        kwargs['hparam_callback'](writer, score)
-
-    return score

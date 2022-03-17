@@ -19,5 +19,6 @@ optuna = "*"
 more_itertools = "*"
 onnx = "*"
 onnxruntime = "*"
+celery = {extras = ["amqp"], version = "*"}
 
 [dev-packages]

@@ -87,13 +87,12 @@ class StateTracker:
     def _list_checkpoints(self):
         return list(filter(lambda x: x.startswith("checkpoint"), os.listdir(self.run_logdir)))
 
-    def save(self):
+    def save(self, checkpoint_id):
         if self.max_checkpoints == 0:
             self.logger.info(f'skipping saving, as max_checkpoints is 0')
             return 
 
-        timestamp = ceil(time())
-        path = os.path.join(self.run_logdir, "checkpoint_" + str(timestamp) + ".pt")
+        path = os.path.join(self.run_logdir, "checkpoint_" + str(checkpoint_id) + ".pt")
         state = [o.state_dict() for o in self.objects.values()]
 
         self.logger.info(f'saving state to {path}')
