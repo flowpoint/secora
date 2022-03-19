@@ -127,7 +127,7 @@ def tokenize_valid_sample(tokenizer, sample, mode, max_input_tokens):
     return proc_sample
 
 
-def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs):
+def preprocess_split(split, config, limit_samples=None, dataset=None, tokenizer=None, **kwargs):
     datasets.set_progress_bar_enabled(kwargs.get('progress', False))
 
     if tokenizer is None:
@@ -136,9 +136,15 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
     num_proc = config['preprocess_cores']
 
     if split == DataSplit.EVAL:
-        dataset = load_dataset("code_search_net", split='all')
+        if dataset is None:
+            dataset = load_dataset("code_search_net", split='all')
+        else:
+            dataset = dataset#['all']
     else:
-        dataset = load_dataset("code_search_net")[split.value]
+        if dataset is None:
+            dataset = load_dataset("code_search_net")[split.value]
+        else:
+            dataset = dataset[split.value]
 
     dataset.shuffle(0)
 

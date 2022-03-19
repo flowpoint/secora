@@ -82,7 +82,6 @@ class Objective:
         self.study = study
         self.default_config = default_config
 
-
     def save_callback(self, checkpoint_id):
         logdir = os.path.join(self.default_config['logdir'], self.default_config['name'])
         study_path = os.path.join(logdir, f'study_{str(checkpoint_id)}.pickle')
@@ -107,8 +106,6 @@ class Objective:
         training_progress = state_tracker['training_progress']
 
         # do one validation pass with the base model
-
-        # -----------
         score = validate(state_tracker['model'], 
                 valid_set, 
                 config, 
@@ -222,7 +219,6 @@ def hyperopt_worker(rank, default_config, progress, debug):
     study = None
     if rank == 0:
         study, storage_name = load_latest(default_config)
-
 
     if rank == 0 and study is None:
         study_name = default_config['name']
