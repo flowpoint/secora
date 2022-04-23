@@ -11,6 +11,17 @@ def get_model_inputs():
     inputs  = input_ids, attention_mask
     return inputs
 
+@pytest.fixture
+def get_config():
+    with "configs/default.config" as f:
+        config_candidate = yaml.safe_load(f)
+
+    config = TrainingConfig()
+    config.parse_from_dict(config_candidate)
+    config.check()
+    config.final()
+    return config
+
 @pytest.mark.slow
 def test_embeddingmodel():
     embsize = 128
@@ -24,5 +35,3 @@ def test_embeddingmodel():
     # normalization of output vectors
     print(torch.mean(outputs))
     assert all(torch.mean(outputs, dim=-1) < 1.)
-
-

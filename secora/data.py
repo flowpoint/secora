@@ -128,7 +128,9 @@ def tokenize_valid_sample(tokenizer, sample, mode, max_input_tokens):
 
 
 def preprocess_split(split, config, limit_samples=None, dataset=None, tokenizer=None, **kwargs):
-    datasets.set_progress_bar_enabled(kwargs.get('progress', False))
+    if not kwargs.get('progress', False) == True:
+        datasets.disable_progress_bar()
+    #datasets.set_progress_bar_enabled(kwargs.get('progress', False))
 
     if tokenizer is None:
         tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)

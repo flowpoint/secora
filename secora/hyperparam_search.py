@@ -1,11 +1,4 @@
 import optuna
-from optuna.trial import TrialState
-from optuna.samplers import RandomSampler
-
-import torch
-import torch.distributed as dist
-import torch.multiprocessing as mp
-
 import random
 import argparse
 import os
@@ -18,9 +11,17 @@ import datetime
 from copy import deepcopy
 from functools import partial
 
+from optuna.trial import TrialState
+from optuna.samplers import RandomSampler
+
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
 from secora.train import *
 from secora.training_tasks import *
 from secora.tracking import make_logger
+from secora.data import get_loader
 
 
 def clean_init(seed):
@@ -31,6 +32,13 @@ def clean_init(seed):
 
 
 def build_trial_config(default_config, single_trial):
+    ''' we set the hyperparameters here instead of inside the training code,
+    to decouple slighly from the optuna/hparam framework dependency.
+    also we want trials to fail fast if the configuration is wrong, 
+    because training big models is costly
+    this also makes unittesting easier
+    '''
+
     dist.barrier()
     rank = dist.get_rank()
     trial = optuna.integration.TorchDistributedTrial(single_trial, rank)
@@ -38,14 +46,13 @@ def build_trial_config(default_config, single_trial):
     # overwrite config values with search hyperparameters
     t = trial.number
     config = deepcopy(default_config)
-    #config['name'] = default_config['name'] + f"_{t}"
     config['name'] = default_config['name'].replace('xxx', f"{t}")
 
     dist.barrier()
 
     if dist.get_rank() == 0:
-        logdir = os.path.join(default_config['logdir'], config['name'])
-        checkdir = os.path.join(default_config['checkpoint_dir'], config['name'])
+        logdir = os.path.join(config['logdir'], config['name'])
+        checkdir = os.path.join(config['checkpoint_dir'], config['name'])
         os.makedirs(logdir, exist_ok=True)
         os.makedirs(checkdir, exist_ok=True)
     dist.barrier()
@@ -98,10 +105,13 @@ class Objective:
                 run_name=config['name'])
             writer.flush()
 
-    def training_plan(self, state_tracker, train_set, valid_set, config, writer, num_epochs, num_shards, grad_accum, **kwargs, display):
+    def training_plan(self, state_tracker, train_set, valid_set, config, writer, display, **kwargs):
         rank = dist.get_rank()
         logger = logging.getLogger('secora')
         logger.info(f'starting training')
+
+        num_epochs = config['epochs']
+        num_shards = config['shards']
 
         training_progress = state_tracker['training_progress']
 
@@ -127,7 +137,6 @@ class Objective:
                     train_loader,
                     config,
                     writer,
-                    grad_accum=grad_accum,
                     display=display,
                     **kwargs
                     )

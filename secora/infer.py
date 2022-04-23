@@ -191,8 +191,10 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
                 samples.append(json.dumps({'url':u, 'lang':l}))
 
         global_step = training_progress.optimizer_step
-        writer.add_embedding(code_embedding, metadata=samples, tag=f'{lang}_code', global_step=global_step)
-        writer.add_embedding(doc_embedding, metadata=samples, tag=f'{lang}_doc', global_step=global_step)
+        #if log_embeddings:
+        if False:
+            writer.add_embedding(code_embedding, metadata=samples, tag=f'{lang}_code', global_step=global_step)
+            writer.add_embedding(doc_embedding, metadata=samples, tag=f'{lang}_doc', global_step=global_step)
 
         logger.debug('log mrr')
         writer.add_scalar(f"mrr/validation/{lang}", lang_score, global_step)

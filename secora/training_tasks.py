@@ -138,34 +138,19 @@ def train_step(model_inputs, cache, shard_loss, state_tracker, config, writer, *
     optim = state_tracker['optimizer']
     scheduler = state_tracker['scheduler']
     model = state_tracker['model']
-    model.train()
 
     training_progress = state_tracker['training_progress']
     step = training_progress.batch
     
     cache_accum = config['batch_size'] // DEVICE_BATCHSIZE
+    grad_accum = config['grad_accum']
 
-    grad_cache = True
-    if grad_cache:
-        grad_accum = 1
-
-    if not grad_cache:
-        emb1 = model(*model_inputs)
-        emb2 = model(*model_inputs)
-        closs = contrastive_loss(emb1, emb2, temp=config['temp'])
-        if config['amp'] == AMP.DISABLE:
-            loss = closs
-        else:
-            loss = scaler.scale(closs)
-
-        shard_loss.add_(loss.detach())
-    else:
-        emb1, c1 = cache.call_model(model, model_inputs)
-        emb2, c2 = cache.call_model(model, model_inputs)
-        cache.cache_1.append(emb1)
-        cache.cache_2.append(emb2)
-        cache.closures_1.append(c1)
-        cache.closures_2.append(c2)
+    emb1, c1 = cache.call_model(model, model_inputs)
+    emb2, c2 = cache.call_model(model, model_inputs)
+    cache.cache_1.append(emb1)
+    cache.cache_2.append(emb2)
+    cache.closures_1.append(c1)
+    cache.closures_2.append(c2)
 
     # only sync before optimizer step
     if (step+1) % cache_accum == 0:
@@ -213,13 +198,14 @@ def train_shard(
         train_loader,
         config,
         writer=None,
-        grad_accum=1,
         **kwargs
         ):
+
 
     rank = dist.get_rank()
     logger = logging.getLogger('secora')
     training_progress = state_tracker['training_progress']
+    state_tracker['model'].train()
 
     cache = GCache(config['temp'], contrastive_loss)
 
@@ -229,7 +215,7 @@ def train_shard(
             dtype=torch.float64,
             requires_grad=False)
 
-    for batch in deviceloader(train_loader, rank):
+    for batch in data.deviceloader(train_loader, rank):
         model_inputs = batch['input_ids'], batch['attention_mask']
         train_step(
                 model_inputs, 
@@ -251,6 +237,7 @@ def train_shard(
         avg_loss = shard_loss.cpu().numpy() / len(train_loader)
         writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         writer.flush()
+
 
 def setup_model(config, rank, train_set, **kwargs):
     logger = logging.getLogger('secora')
@@ -289,16 +276,18 @@ def setup_model(config, rank, train_set, **kwargs):
     return model
 
 
-def training_plan(state_tracker, train_set, valid_set, config, writer, num_epochs, num_shards, grad_accum, **kwargs, display):
+def training_plan(state_tracker, train_set, valid_set, config, writer, display, **kwargs):
     rank = dist.get_rank()
     logger = logging.getLogger('secora')
     logger.info(f'starting training')
 
     training_progress = state_tracker['training_progress']
 
-    # do one validation pass with the base model
+    num_epochs = config['epochs']
+    num_shards = config['shards']
+    grad_accum = config['grad_accum']
 
-    # -----------
+    # do one validation pass with the base model
     score = validate(state_tracker['model'], 
             valid_set, 
             config, 
@@ -320,7 +309,6 @@ def training_plan(state_tracker, train_set, valid_set, config, writer, num_epoch
                 train_loader,
                 config,
                 writer,
-                grad_accum=grad_accum,
                 display=display,
                 **kwargs
                 )
@@ -338,11 +326,12 @@ def training_plan(state_tracker, train_set, valid_set, config, writer, num_epoch
             torch.cuda.synchronize()
             dist.barrier()
 
-            checkpoint_id = ceil(time.time())
+            checkpoint_id = ceil(time())
             if rank == 0:
                 state_tracker.save(checkpoint_id)
 
         training_progress.epoch_done()
+
 
 def training_setup(config, **kwargs):
     rank = dist.get_rank()
@@ -390,7 +379,7 @@ def training_setup(config, **kwargs):
 
     scaler = GradScaler()
     training_progress = TrainingProgress()
-    display = ProgressDisplay(training_progress, num_steps_per_shard, enabled=rank == 0, **kwargs)
+    display = ProgressDisplay(training_progress, num_steps_per_shard, enabled=(rank == 0), **kwargs)
 
     state_tracker = StateTracker(
             config['name'],
@@ -402,24 +391,19 @@ def training_setup(config, **kwargs):
             scaler=scaler,
             training_progress=training_progress)
 
-    if kwargs.get('debug', False) == True:
-        num_epochs = 2
-        num_shards = 2
-        grad_accum = 1
-    else:
-        # load latest checkpoint 
-        torch.cuda.synchronize()
-        dist.barrier()
-        state_tracker.load_latest()
+    # load latest checkpoint 
+    torch.cuda.synchronize()
+    dist.barrier()
+    state_tracker.load_latest()
 
-        num_epochs = config['epochs']
-        num_shards = config['shards']
-        grad_accum = config['grad_accum']
+    num_epochs = config['epochs']
+    num_shards = config['shards']
 
     logger.info(f'shard_size: {len(train_set)/num_shards} samples')
     logger.info(f'validation set size: {len(valid_set)} samples')
 
-    return state_tracker, train_set, valid_set, config, writer, num_epochs, num_shards, display
+    return state_tracker, train_set, valid_set, config, writer, display
+
 
 def train(config, **kwargs):
     t_args = training_setup(config, **kwargs)
