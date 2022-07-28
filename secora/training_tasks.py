@@ -276,7 +276,10 @@ def setup_model(config, rank, train_set, **kwargs):
     return model
 
 
-def training_plan(state_tracker, train_set, valid_set, config, writer, display, **kwargs):
+# a training plan exactly and only describes the training tasks (steps)
+# that are performed for a single training run of a single model
+# it defines but doesn't doesn't execute
+def training_plan(state_tracker, datasource, config, writer, display, **kwargs):
     rank = dist.get_rank()
     logger = logging.getLogger('secora')
     logger.info(f'starting training')
@@ -287,6 +290,9 @@ def training_plan(state_tracker, train_set, valid_set, config, writer, display, 
     num_shards = config['shards']
     grad_accum = config['grad_accum']
 
+    train_set = datasource['train']
+    valid_set = datasource['valid']
+
     # do one validation pass with the base model
     score = validate(state_tracker['model'], 
             valid_set, 
@@ -294,6 +300,7 @@ def training_plan(state_tracker, train_set, valid_set, config, writer, display, 
             writer, 
             state_tracker['training_progress'],
             **kwargs)
+
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -332,8 +339,9 @@ def training_plan(state_tracker, train_set, valid_set, config, writer, display, 
 
         training_progress.epoch_done()
 
-
-def training_setup(config, **kwargs):
+# possibly substitute this step with infrastructure provisioning
+# populate/ provision all the needed state in state_tracker
+def training_setup(config, t_limit=None, v_limit=None, **kwargs):
     rank = dist.get_rank()
     if rank == 0:
         path = os.path.join(config['logdir'], config['name'], 'config.yml')
@@ -346,8 +354,8 @@ def training_setup(config, **kwargs):
     logger.info('started train function')
 
     if kwargs['debug'] == True:
-        t_limit = 20*config['batch_size']
-        v_limit = 20*3000#DEVICE_BATCHSIZE
+        t_limit = kwargs.get('t_limit', 20*config['batch_size'])
+        v_limit = kwargs.get('v_limit', 20*3000) #DEVICE_BATCHSIZE
 
     train_set = data.preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
     valid_set = data.preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
@@ -402,7 +410,9 @@ def training_setup(config, **kwargs):
     logger.info(f'shard_size: {len(train_set)/num_shards} samples')
     logger.info(f'validation set size: {len(valid_set)} samples')
 
-    return state_tracker, train_set, valid_set, config, writer, display
+    datasource = {'train': train_set, 'valid': valid_set}
+
+    return state_tracker, datasource, config, writer, display
 
 
 def train(config, **kwargs):

@@ -13,6 +13,7 @@ from collections import OrderedDict
 
 
 class BaseModel(Enum):
+    TEST = 'microsoft/codebert-base'
     CODEBERT = 'microsoft/codebert-base'
     ROBERTA = 'roberta-base'
     DISTILROBERTA = 'distilroberta-base'

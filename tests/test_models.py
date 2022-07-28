@@ -11,6 +11,9 @@ class MockModel(torch.nn.Module):
     def forward(self, *args, **kwargs):
         return torch.ones([1, self.embedding_size])
 
+    def load_state_dict(self):
+        pass
+
 
 @pytest.fixture
 def get_model_inputs():
