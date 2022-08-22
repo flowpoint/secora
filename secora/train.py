@@ -486,7 +486,11 @@ if __name__ == "__main__":
     clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
 
-    datasets.set_progress_bar_enabled(args.progress)
+    #datasets.set_progress_bar_enabled(args.progress)
+    if args.progress:
+        datasets.enable_progress_bar()
+    else:
+        datasets.disable_progress_bar()
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

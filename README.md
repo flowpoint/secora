@@ -9,7 +9,6 @@ our latest results can be seen in `visualization/Screenshot from 2022-02-28 23-5
 
 our previous graph, trained on just the python subset of CodeSearchNet is `visualization/Screenshot from 2022-02-17 11-54-51.png`
 
-
 ## environments
 
 - pipenv 
@@ -40,11 +39,25 @@ python -m secora.train configs/default.yml --progress --name distilroberta
 tensorboard --logdir ouput
 ```
 
+## type check:
+```
+mypy secora/train.py
+```
+
 ## run tests:
 ```
 pytest
 pytest --runslow --runcuda
 ```
+
+## design choices
+### why handwritten ninja
+i needed a general build tool
+bash scripts are errorprone
+setuptools don't like to support test invokation, 
+tox is not applicable because of multiple environments
+meson, cmake, ... are overkill
+
 ## Background
 important papers:  
 
@@ -79,3 +92,5 @@ existing software:
 
 - [sourcegraph](https://sourcegraph.com/search)
 - [openai codex](https://openai.com/blog/openai-codex/)
+
+the course submissing can be found under the tag submission

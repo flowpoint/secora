@@ -1,6 +1,7 @@
 import pytest
 import os
 from secora.data import *
+import secora.data
 from transformers import AutoTokenizer
 import tempfile
 from datasets import Dataset
@@ -18,7 +19,7 @@ def test_fair_truncate_both_long():
 
         tokenizer(doc+tokenizer.sep_token+code)
 
-        truncated_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
+        truncated_sample = secora.data._fair_truncate(tokenizer, doc, code, max_input_tokens)
         halflen = max_input_tokens//2 - 2
         assert truncated_sample.startswith('a'*halflen)
         assert truncated_sample.endswith('b'*halflen)
@@ -31,7 +32,7 @@ def test_fair_truncate_short_doc():
         doc = 'a'*(max_input_tokens//5)
         code = 'b'*1025
     
-        truncated_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
+        truncated_sample = secora.data._fair_truncate(tokenizer, doc, code, max_input_tokens)
         assert truncated_sample.startswith(doc)
 
 @pytest.mark.slow
@@ -42,7 +43,7 @@ def test_fair_truncate_short_code():
         doc = 'a'*1025
         code = 'b'*(max_input_tokens//5)
     
-        truncated_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
+        truncated_sample = secora.data._fair_truncate(tokenizer, doc, code, max_input_tokens)
         assert truncated_sample.endswith(code)
 
 @pytest.mark.slow
@@ -53,7 +54,7 @@ def test_fair_truncate_both_short():
         doc = 'a'*(max_input_tokens//4)
         code = 'b'*(max_input_tokens//4)
 
-        truncated_sample = fair_truncate(tokenizer, doc, code, max_input_tokens)
+        truncated_sample = secora.data._fair_truncate(tokenizer, doc, code, max_input_tokens)
     # test with short doc
         assert truncated_sample.startswith(doc)
         assert truncated_sample.endswith(code)

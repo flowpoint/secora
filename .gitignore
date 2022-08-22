@@ -140,3 +140,6 @@ output2/*
 Pipfile.lock
 resources/
 third_party/
+
+
+.ninja_log

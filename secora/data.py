@@ -126,7 +126,11 @@ def tokenize_valid_sample(tokenizer, sample, mode, max_input_tokens):
 
 
 def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs):
-    datasets.set_progress_bar_enabled(kwargs.get('progress', False))
+    if kwargs.get('progress', False):
+        datasets.enable_progress_bar()
+    else:
+        datasets.disable_progress_bar()
+    #datasets.logging.set_progress_bar_enabled(kwargs.get('progress', False))
 
     if tokenizer is None:
         tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
@@ -174,9 +178,8 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
     return dataset
 
 
+# convenience function 
 def get_loader(dataset, batch_size, workers=0, dist=False, **kwargs):
-    # convenience function 
-
     if dist == True:
         sampler = DistributedSampler(dataset, drop_last=True, shuffle=False)
     else:

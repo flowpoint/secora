@@ -1,6 +1,5 @@
 FROM docker.io/rocm/pytorch:latest
 
-LABEL org.opencontainers.image.authors="flowpoint@protonmail.com"
 ENV HF_HOME=/root/.cache/huggingface
 ENV MASTER_ADDR=localhost
 ENV MASTER_PORT=17909
