@@ -46,17 +46,18 @@ mypy secora/train.py
 
 ## run tests:
 ```
+# run all test
 pytest
-pytest --runslow --runcuda
+# skip slow and cuda tests
+pytest --fastonly --nocuda
 ```
 
 ## design choices
-### why handwritten ninja
+### why meson
 i needed a general build tool
 bash scripts are errorprone
-setuptools don't like to support test invokation, 
-tox is not applicable because of multiple environments
-meson, cmake, ... are overkill
+setuptools don't seem to work well with multilanguage projects or build containers
+meson has good syntax and features
 
 ## Background
 important papers:  

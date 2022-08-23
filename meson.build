@@ -1,0 +1,10 @@
+project('secora')
+
+subdir('environments')
+
+#r = run_command(pytest)
+##run_target('environments', )
+#library('secora')
+
+pytest = find_program('pytest')
+test('pytest', pytest, args : ['/root/secora/'], timeout : 600, is_parallel : false)
