@@ -144,4 +144,6 @@ third_party/
 
 .ninja_log
 builddir
+build
 compile
+reconfigure
