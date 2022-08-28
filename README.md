@@ -77,16 +77,19 @@ pytest --fastonly --nocuda
 ```
 
 ## build with meson
+
+if build_container is true, it saves the docker container to builddir
+if you don't have enough ram/space, you need to change the builddir path
+
 ```
-meson setup builddir
+meson setup /tmp/builddir
 
 # after some modifications you maybe also need
-meson --reconfigure builddir
+meson --reconfigure /tmp/builddir
 
 # configure the build, see meson_options.txt
+cd /tmp/builddir
 meson configure -Dbuild_container=true
-
-cd builddir
 meson compile -v
 ```
 

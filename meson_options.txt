@@ -1,1 +1,2 @@
 option('build_container', type : 'boolean', value : false)
+option('accelerator', type : 'combo', choices : ['amd', 'nvidia', 'cpu'], value : 'amd')

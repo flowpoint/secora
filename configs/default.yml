@@ -1,5 +1,5 @@
-logdir: "./output"
-checkpoint_dir: "./output"
+logdir: "/root/secora_output/"
+checkpoint_dir: "/root/secora_output/"
 
 # the name has to follow the naming scheme
 # see secora/train.py
@@ -8,7 +8,7 @@ seed: 42
 max_checkpoints: 10
 
 num_gpus: 1 #'auto'
-amp: default
+amp: disable #default
 cuda_graphs: False
 
 preprocess_cores: 10
@@ -29,7 +29,7 @@ optimizer: adam
 lr_schedule: constant
 
 learning_rate: 1e-5
-batch_size: 8
+batch_size: 2
 grad_accum: 64 # counted in batches
 temp: 0.05
 dropout: 0.1

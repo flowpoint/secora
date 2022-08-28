@@ -20,6 +20,8 @@ test_setting_classes = [ IntSetting, FloatSetting, DirectorySetting ]
 test_option_classes = [ IntOption, FloatOption, DirectoryOption ]
 test_values = [1, 1., '/tmp']
 
+
+
 class TestConfig:
     @pytest.mark.parametrize('setting_class,name,value', zip(test_setting_classes, test_setting_names, test_values))
     def test_setting_creation(self, setting_class, name, value):

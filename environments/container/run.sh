@@ -18,6 +18,7 @@ $container_command run -it \
     --cap-add=SYS_PTRACE \
     --security-opt seccomp=unconfined \
     -v /home/slow4/huggingface:/root/.cache/huggingface:z \
-    -v /home/slow4/secora:/root/secora:z \
+    -v /home/slow4/secora_output:/root/secora_output:z \
+    -v /home/flowpoint/secora:/root/secora:z \
     flowpoint/secora_dev:0.0.1 \
     /bin/bash

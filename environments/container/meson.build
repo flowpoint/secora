@@ -6,15 +6,17 @@ podman = find_program('podman')
 #
 
 custom_target('build podman container',
-  build_always : true,
-  input : 'Dockerfile',
-  output :  'container.tar',
-  command : [ podman, 'build', '--label', 'secora_dev', '--tag', 'flowpoint/secora_dev:0.0.1', '--output', 'type=tar,dest=@OUTPUT@', '-f', '@INPUT@' ],
-  #command : [ 'echo', '@OUTPUT@'],
-  #install : false,
-  build_by_default : true)
+   build_always : true,
+   input : 'Dockerfile',
+   output :  'container.tar',
+   command : [ podman, 'build', '--label', 'secora_dev', '--tag', 'flowpoint/secora_dev:0.0.1', '--output', 'type=tar,dest=@OUTPUT@', '-f', '@INPUT@' ],
+   #command : [ 'echo', '@OUTPUT@'],
+   #install : false,
+   build_by_default : true)
 
 #r = run_command(podman, 'build', '--label', 'secora_dev', '--tag', 'flowpoint/secora_dev:0.0.1', '-f', 'Dockerfile', check: true)
+
+#output = r.stdout().strip()
 
 # configure_file(input : 'Dockerfile',
 #   output : 'Dockerfile',

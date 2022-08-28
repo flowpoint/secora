@@ -1,7 +1,9 @@
 import os
+import sys
 import time
 from time import time
 from enum import Enum, auto
+from dataclasses import dataclass, field
 
 from math import ceil
 import argparse
@@ -41,7 +43,8 @@ from secora.tracking import *
 import datasets
 from SM3 import SM3
 
-from grad_cache.functional import cached, cat_input_tensor
+#from grad_cache.functional import cached, cat_input_tensor
+import grad_cache.functional
 
 TIMEOUT = datetime.timedelta(65)
 
@@ -131,6 +134,53 @@ class TrainingConfig(SimpleConfig):
             # parse through the settings parsing function
             self[k] = self.settings[k].parse(v)
 
+@dataclass
+class GCache:
+    cache_1: list = field(default_factory=list)
+    cache_2: list = field(default_factory=list)
+    closures_1: list = field(default_factory=list)
+    closures_2: list = field(default_factory=list)
+
+def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
+    ''' the cache is side effected '''
+    def cfn1(*args, **kwargs):
+        emb, closure = grad_cache.functional.cached(forward1)(*args, **kwargs)
+        cache.cache_1.append(emb)
+        cache.closures_1.append(closure)
+        return emb
+
+    def cfn2(*args, **kwargs):
+        emb, closure = grad_cache.functional.cached(forward2)(*args, **kwargs)
+        cache.cache_2.append(emb)
+        cache.closures_2.append(closure)
+        return emb
+
+    def lfn(*args, **kwargs):
+        loss = grad_cache.functional.cat_input_tensor(loss_fn)(*args, **kwargs)
+        return loss
+
+    def ofn(*args, **kwargs):
+        for c, v in zip(cache.closures_1, cache.cache_1):
+            #print(c)
+            #print(v)
+            c(v)
+        for c, v in zip(cache.closures_2, cache.cache_2):
+            c(v)
+
+        res = optimize_fn(*args, **kwargs)
+
+        cache.cache_1 = []
+        cache.cache_2 = []
+        cache.closures_1 = []
+        cache.closures_2 = []
+
+        return res
+
+    return cfn1, cfn2, lfn, ofn 
+
+def should_optimize(step, config):
+    cache_accum = 512 // config['batch_size']
+    return (step+1) % cache_accum == 0
 
 def train_shard(
         state_tracker,
@@ -152,27 +202,14 @@ def train_shard(
     model = state_tracker['model']
     model.train()
 
-    grad_cache = True
+    #grad_cache = True
+    grad_cache = False
     if grad_cache:
         grad_accum=1
 
     shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
 
-    @cached
-    def call_model(model, model_inputs):
-        return model(*model_inputs)
-
-    @cat_input_tensor
-    def loss_fn(x, y):
-        return contrastive_loss(x, y, temp=config['temp'])
-
-    cache_1 = []
-    cache_2 = []
-    closures_1 = []
-    closures_2 = []
-
-    #cache_accum = 64
-    cache_accum = 512 // config['batch_size']
+    cache = GCache()
 
     if rank == 0:
         bar = tqdm(
@@ -184,26 +221,49 @@ def train_shard(
 
     heartbeat = time()
 
+    forward_1 = model
+    forward_2 = model
+    loss_fn = lambda a,b: contrastive_loss(a, b, temp=config['temp'])
+    optimize = optim.step
+
+    if grad_cache:
+        fns = gradcache_fns(forward_1, forward_2, loss_fn, optim.step, cache)
+        forward_1, forward_2, loss_fn, optimize = fns
+
+
     for step, batch in enumerate(deviceloader(train_loader, rank)):
         if not grad_cache:
             model_inputs = batch['input_ids'], batch['attention_mask']
-            emb1 = model(*model_inputs)
-            emb2 = model(*model_inputs)
-            closs = contrastive_loss(emb1, emb2, temp=config['temp'])
+            emb1 = forward_1(*model_inputs)
+            emb2 = forward_2(*model_inputs)
+            #closs = contrastive_loss(emb1, emb2, temp=config['temp'])
+            closs = loss_fn(emb1, emb2)
+            loss = closs
+            '''
             if config['amp'] == AMP.DISABLE:
-                loss = closs
             else:
                 loss = scaler.scale(closs)
+            '''
 
-            shard_loss.add_(loss.detach())
+            loss.backward()
+            optimize()
+            optimizer.zero_grad()
+            continue
+
+            #shard_loss.add_(loss.detach())
         else:
             model_inputs = batch['input_ids'], batch['attention_mask']
+            emb1 = forward_1(*model_inputs)
+            emb2 = forward_2(*model_inputs)
+            #print(cache)
+            '''
             emb1, c1 = call_model(model, model_inputs)
             emb2, c2 = call_model(model, model_inputs)
-            cache_1.append(emb1)
-            cache_2.append(emb2)
-            closures_1.append(c1)
-            closures_2.append(c2)
+            cache.cache_1.append(emb1)
+            cache.cache_2.append(emb2)
+            cache.closures_1.append(c1)
+            cache.closures_2.append(c2)
+            '''
 
 
         if rank == 0 and time() - heartbeat > 60:
@@ -211,14 +271,17 @@ def train_shard(
             heartbeat = time()
 
         # only sync before optimizer step
-        if (step+1) % cache_accum == 0:
+        if should_optimize(step, config):#(step+1) % cache_accum == 0:
             bar.update(n=1)
 
-            closs = loss_fn(cache_1, cache_2)
+            #closs = loss_fn(cache_1, cache_2)
+            closs = loss_fn(emb1, emb2)
+
             loss = scaler.scale(closs)
             loss.backward()
             shard_loss.add_(loss.detach())
             
+            '''
             for c, e in zip(closures_1, cache_1):
                 c(e)
             for c, e in zip(closures_2, cache_2):
@@ -228,6 +291,7 @@ def train_shard(
             cache_2 = []
             closures_1 = []
             closures_2 = []
+            '''
 
             #gradient clipping
             if config['grad_clip'] != 0.:
@@ -240,7 +304,8 @@ def train_shard(
                 scaler.step(optim)
                 scaler.update()
             else:
-                optim.step()
+                optimize()
+                #optim.step()
 
             scheduler.step()
             training_progress.optimizer_step += 1
@@ -260,13 +325,9 @@ def train_shard(
 
 
 def train(config, preempt_callback=None, **kwargs):
-    #check_config(config)
     rank = dist.get_rank()
+    torch.autograd.set_detect_anomaly(True)
     if rank == 0:
-        path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        with open(path, 'w') as f:
-            f.write(yaml.dump(config.to_dict()))
-
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
 
     logger = kwargs['logger']
@@ -366,12 +427,14 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info(f'starting training')
 
     # do one validation pass with the base model
+    '''
     score = validate(state_tracker['model'], 
             valid_set, 
             config, 
             writer, 
             state_tracker['training_progress'],
             **kwargs)
+            '''
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -422,11 +485,22 @@ def train(config, preempt_callback=None, **kwargs):
 
 def training_worker(rank, config, progress, debug):
     world_size = config['num_gpus']
-
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
+
+    if rank == 0:
+        logdir = os.path.join(config['logdir'], config['name'])
+        checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
+        os.makedirs(logdir, exist_ok=True)
+        os.makedirs(checkdir, exist_ok=True)
+
+        path = os.path.join(config['logdir'], config['name'], 'config.yml')
+        with open(path, 'w') as f:
+            f.write(yaml.dump(config.to_dict()))
+
     logger = make_logger(config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
+
     train(config, progress=progress, debug=debug, logger=logger)
 
     torch.cuda.synchronize()
@@ -441,32 +515,21 @@ def clean_init(seed):
     torch.use_deterministic_algorithms(True)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='manual training script.')
-    parser.add_argument('config_file', type=argparse.FileType('r'))
-    # these values override the config values if specified
-    parser.add_argument('--name', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=None)
-    parser.add_argument('--max_checkpoints', type=int, default=None) 
-    # 
-    parser.add_argument('--debug', action='store_true', default=False)
-    parser.add_argument('--progress', action='store_true', default=False)
-    args = parser.parse_args()
-
-
+def build_config(config_id: str, args=None):
+    ''' config id can be arbitrary, but must be unique in the config/training run store '''
     config = TrainingConfig()
 
+    # this will need to be parallelism safe in future
     with args.config_file as f:
         config_candidate = yaml.safe_load(f)
 
-    timestamp = str(ceil(time()))
     if args.name is not None:
         if args.debug == True:
             prefix = 'debug'
         else: 
             prefix = 'run'
             
-        config_candidate['name'] = f'{prefix}_{args.name}_t0_utc{timestamp}'
+        config_candidate['name'] = f'{prefix}_{args.name}_t0_utc{config_id}'
 
     if args.batch_size is not None:
         config_candidate['batch_size'] = args.batch_size
@@ -478,15 +541,16 @@ if __name__ == "__main__":
     config.check()
     config.final()
 
-    logdir = os.path.join(config['logdir'], config['name'])
-    checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
-    os.makedirs(logdir, exist_ok=True)
-    os.makedirs(checkdir, exist_ok=True)
+    return config
 
+
+def main(argv):
+    args = parse_args(argv)
+    timestamp = str(ceil(time()))
+    config = build_config(config_id=timestamp, args=args)
     clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
 
-    #datasets.set_progress_bar_enabled(args.progress)
     if args.progress:
         datasets.enable_progress_bar()
     else:
@@ -497,3 +561,19 @@ if __name__ == "__main__":
             args=(config, args.progress, args.debug),
             nprocs = config['num_gpus'],
             join=True)
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description='manual training script.')
+    parser.add_argument('config_file', type=argparse.FileType('r'))
+    # these values override the config values if specified
+    parser.add_argument('--name', type=str, default=None)
+    parser.add_argument('--batch_size', type=int, default=None)
+    parser.add_argument('--max_checkpoints', type=int, default=None) 
+    parser.add_argument('--debug', action='store_true', default=False)
+    parser.add_argument('--progress', action='store_true', default=False)
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    main(sys.argv)

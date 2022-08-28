@@ -9,5 +9,5 @@ subdir('environments')
 pytest = find_program('pytest', required : false)
 
 if pytest.found()
-  test('pytest', pytest, args : ['/root/secora/'], timeout : 600, is_parallel : false)
+  test('pytest', pytest, args : ['-n', 'auto', '/root/secora/'], timeout : 600, is_parallel : false)
 endif
