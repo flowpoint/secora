@@ -161,8 +161,6 @@ def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
 
     def ofn(*args, **kwargs):
         for c, v in zip(cache.closures_1, cache.cache_1):
-            #print(c)
-            #print(v)
             c(v)
         for c, v in zip(cache.closures_2, cache.cache_2):
             c(v)
@@ -179,8 +177,10 @@ def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
     return cfn1, cfn2, lfn, ofn 
 
 def should_optimize(step, config):
-    cache_accum = 512 // config['batch_size']
-    return (step+1) % cache_accum == 0
+    #cache_accum = 512 // config['batch_size']
+    #return (step+1) % cache_accum == 0
+    return True
+
 
 def train_shard(
         state_tracker,
@@ -202,8 +202,8 @@ def train_shard(
     model = state_tracker['model']
     model.train()
 
-    #grad_cache = True
-    grad_cache = False
+    grad_cache = True
+    #grad_cache = False
     if grad_cache:
         grad_accum=1
 
@@ -224,46 +224,28 @@ def train_shard(
     forward_1 = model
     forward_2 = model
     loss_fn = lambda a,b: contrastive_loss(a, b, temp=config['temp'])
-    optimize = optim.step
 
-    if grad_cache:
-        fns = gradcache_fns(forward_1, forward_2, loss_fn, optim.step, cache)
+    def optimize():
+        optim.step()
+        optim.zero_grad(set_to_none=True)
+
+    if grad_cache == True:
+        fns = gradcache_fns(forward_1, forward_2, loss_fn, optimize, cache)
         forward_1, forward_2, loss_fn, optimize = fns
 
-
     for step, batch in enumerate(deviceloader(train_loader, rank)):
-        if not grad_cache:
-            model_inputs = batch['input_ids'], batch['attention_mask']
+        model_inputs = batch['input_ids'], batch['attention_mask']
+        #model.train(False)
+        with torch.no_grad():
             emb1 = forward_1(*model_inputs)
-            emb2 = forward_2(*model_inputs)
-            #closs = contrastive_loss(emb1, emb2, temp=config['temp'])
-            closs = loss_fn(emb1, emb2)
-            loss = closs
-            '''
-            if config['amp'] == AMP.DISABLE:
-            else:
-                loss = scaler.scale(closs)
-            '''
+        emb2 = forward_2(*model_inputs)
+        loss = loss_fn(emb1, emb2)
 
-            loss.backward()
-            optimize()
-            optimizer.zero_grad()
-            continue
+        if config['amp'] != AMP.DISABLE:
+            loss = scaler.scale(loss)
 
-            #shard_loss.add_(loss.detach())
-        else:
-            model_inputs = batch['input_ids'], batch['attention_mask']
-            emb1 = forward_1(*model_inputs)
-            emb2 = forward_2(*model_inputs)
-            #print(cache)
-            '''
-            emb1, c1 = call_model(model, model_inputs)
-            emb2, c2 = call_model(model, model_inputs)
-            cache.cache_1.append(emb1)
-            cache.cache_2.append(emb2)
-            cache.closures_1.append(c1)
-            cache.closures_2.append(c2)
-            '''
+        loss.backward()
+        shard_loss.add_(loss.detach())
 
 
         if rank == 0 and time() - heartbeat > 60:
@@ -271,28 +253,11 @@ def train_shard(
             heartbeat = time()
 
         # only sync before optimizer step
-        if should_optimize(step, config):#(step+1) % cache_accum == 0:
+        if should_optimize(step, config) == True:
+            torch.cuda.synchronize()
+            dist.barrier()
             bar.update(n=1)
-
-            #closs = loss_fn(cache_1, cache_2)
-            closs = loss_fn(emb1, emb2)
-
-            loss = scaler.scale(closs)
-            loss.backward()
-            shard_loss.add_(loss.detach())
             
-            '''
-            for c, e in zip(closures_1, cache_1):
-                c(e)
-            for c, e in zip(closures_2, cache_2):
-                c(e)
-
-            cache_1 = []
-            cache_2 = []
-            closures_1 = []
-            closures_2 = []
-            '''
-
             #gradient clipping
             if config['grad_clip'] != 0.:
                 scaler.unscale_(optim)
@@ -305,15 +270,15 @@ def train_shard(
                 scaler.update()
             else:
                 optimize()
-                #optim.step()
 
             scheduler.step()
             training_progress.optimizer_step += 1
             if rank == 0:
-                writer.add_scalar("learning_rate/train", scheduler.get_last_lr()[0], training_progress.optimizer_step)
+                writer.add_scalar(
+                        "learning_rate/train", 
+                        scheduler.get_last_lr()[0], 
+                        training_progress.optimizer_step)
                 writer.flush()
-
-            optim.zero_grad(set_to_none=True)
 
     dist.all_reduce(shard_loss)
     torch.cuda.synchronize()
@@ -427,14 +392,12 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info(f'starting training')
 
     # do one validation pass with the base model
-    '''
     score = validate(state_tracker['model'], 
             valid_set, 
             config, 
             writer, 
             state_tracker['training_progress'],
             **kwargs)
-            '''
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -546,6 +509,7 @@ def build_config(config_id: str, args=None):
 
 def main(argv):
     args = parse_args(argv)
+
     timestamp = str(ceil(time()))
     config = build_config(config_id=timestamp, args=args)
     clean_init(seed=config['seed'])
@@ -572,8 +536,9 @@ def parse_args(argv):
     parser.add_argument('--max_checkpoints', type=int, default=None) 
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--progress', action='store_true', default=False)
-    return parser.parse_args(argv)
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
+    print(sys.argv)
     main(sys.argv)
