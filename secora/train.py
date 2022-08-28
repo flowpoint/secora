@@ -43,7 +43,6 @@ from secora.tracking import *
 import datasets
 from SM3 import SM3
 
-#from grad_cache.functional import cached, cat_input_tensor
 import grad_cache.functional
 
 TIMEOUT = datetime.timedelta(65)
@@ -176,10 +175,100 @@ def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
 
     return cfn1, cfn2, lfn, ofn 
 
+
 def should_optimize(step, config):
     #cache_accum = 512 // config['batch_size']
     #return (step+1) % cache_accum == 0
     return True
+
+
+def train_step(
+        train_loader,
+        state_tracker,
+        config, 
+        rank,
+        **kwargs):
+    ''' the necessary accumulation/gradcache steps 
+    until and including one optimizer step 
+
+    note: the last values in a shard are omitted
+    because they won't fit for a full optimizer/accumulation step/batch
+
+    this can be alleviated by fitting the shard size or optimizer/accumulation,
+    so that the accumulation divides the shard size
+    '''
+
+    optim = state_tracker['optimizer']
+    scheduler = state_tracker['scheduler']
+    training_progress = state_tracker['training_progress']
+    scaler = state_tracker['scaler']
+    model = state_tracker['model']
+
+    model.train()
+
+    cache = GCache()
+    forward_1 = forward_2 = model
+
+    def loss_fn(a, b):
+        return contrastive_loss(a, b, temp=config['temp'])
+
+    def optimize():
+        optim.step()
+        optim.zero_grad(set_to_none=True)
+
+    if grad_cache == True:
+        fns = gradcache_fns(forward_1, forward_2, loss_fn, optimize, cache)
+        forward_1, forward_2, loss_fn, optimize = fns
+
+    step = 0
+    step_loss = torch.tensor([0.], device=rank)
+
+    while True:
+        try:
+            batch = next(deviceloader(train_loader, rank))
+        except StopIteration as e:
+            return step_loss, True
+
+        model_inputs = batch['input_ids'], batch['attention_mask']
+        with torch.no_grad():
+            emb1 = forward_1(*model_inputs)
+        emb2 = forward_2(*model_inputs)
+        loss = loss_fn(emb1, emb2)
+        print('loss')
+        print(loss)
+
+        if config['amp'] != AMP.DISABLE:
+            loss = scaler.scale(loss)
+
+        step_loss += loss
+        loss.backward()
+        step += 1
+        
+        if should_optimize(step, config) == True:
+            break
+
+    # only sync before optimizer step
+    if kwargs.get('distributed', True) == True:
+        torch.cuda.synchronize()
+        dist.barrier()
+    
+    #gradient clipping
+    if config['grad_clip'] != 0.:
+        scaler.unscale_(optim)
+        clip_grad_norm_(
+                model.parameters(), 
+                max_norm=config['grad_clip'])
+
+    if config['amp'] != AMP.DISABLE:
+        scaler.step(optim)
+        scaler.update()
+    else:
+        optimize()
+
+    scheduler.step()
+    training_progress.optimizer_step += 1
+
+    return step_loss, False
 
 
 def train_shard(
@@ -191,25 +280,10 @@ def train_shard(
         **kwargs
         ):
 
-    rank = dist.get_rank()
-
+    rank = kwargs.get('rank', 0)
     logger = kwargs['logger']
-
-    optim = state_tracker['optimizer']
     scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
-    scaler = state_tracker['scaler']
-    model = state_tracker['model']
-    model.train()
-
-    grad_cache = True
-    #grad_cache = False
-    if grad_cache:
-        grad_accum=1
-
-    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
-
-    cache = GCache()
 
     if rank == 0:
         bar = tqdm(
@@ -221,70 +295,46 @@ def train_shard(
 
     heartbeat = time()
 
-    forward_1 = model
-    forward_2 = model
-    loss_fn = lambda a,b: contrastive_loss(a, b, temp=config['temp'])
+    grad_cache = True
+    #grad_cache = False
+    if grad_cache:
+        grad_accum=1
 
-    def optimize():
-        optim.step()
-        optim.zero_grad(set_to_none=True)
+    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=false)
+    shard_step = 0
+    shard_done = false
 
-    if grad_cache == True:
-        fns = gradcache_fns(forward_1, forward_2, loss_fn, optimize, cache)
-        forward_1, forward_2, loss_fn, optimize = fns
+    while shard_done == false:
+        loss, shard_done = train_step(
+                deviceloader(train_loader, rank),
+                state_tracker,
+                cache,
+                config, 
+                rank, 
+                **kwargs)
 
-    for step, batch in enumerate(deviceloader(train_loader, rank)):
-        model_inputs = batch['input_ids'], batch['attention_mask']
-        #model.train(False)
-        with torch.no_grad():
-            emb1 = forward_1(*model_inputs)
-        emb2 = forward_2(*model_inputs)
-        loss = loss_fn(emb1, emb2)
-
-        if config['amp'] != AMP.DISABLE:
-            loss = scaler.scale(loss)
-
-        loss.backward()
-        shard_loss.add_(loss.detach())
-
+        bar.update(n=1)
+        shard_step += 1
 
         if rank == 0 and time() - heartbeat > 60:
-            logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {step}/{len(train_loader)}")
+            logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {training_progress.optimizer_step}")
             heartbeat = time()
 
-        # only sync before optimizer step
-        if should_optimize(step, config) == True:
-            torch.cuda.synchronize()
-            dist.barrier()
-            bar.update(n=1)
-            
-            #gradient clipping
-            if config['grad_clip'] != 0.:
-                scaler.unscale_(optim)
-                clip_grad_norm_(
-                        model.parameters(), 
-                        max_norm=config['grad_clip'])
+        if rank == 0:
+            writer.add_scalar(
+                    "learning_rate/train", 
+                    scheduler.get_last_lr()[0], 
+                    training_progress.optimizer_step)
+            writer.flush()
 
-            if config['amp'] != AMP.DISABLE:
-                scaler.step(optim)
-                scaler.update()
-            else:
-                optimize()
-
-            scheduler.step()
-            training_progress.optimizer_step += 1
-            if rank == 0:
-                writer.add_scalar(
-                        "learning_rate/train", 
-                        scheduler.get_last_lr()[0], 
-                        training_progress.optimizer_step)
-                writer.flush()
+        shard_loss.add_(loss.detach())
+        shard_step += 1
 
     dist.all_reduce(shard_loss)
     torch.cuda.synchronize()
     dist.barrier()
     if rank == 0:
-        avg_loss = shard_loss.cpu().numpy()/step
+        avg_loss = shard_loss.cpu().numpy() / shard_step
         writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         writer.flush()
 
@@ -540,5 +590,4 @@ def parse_args(argv):
 
 
 if __name__ == "__main__":
-    print(sys.argv)
     main(sys.argv)

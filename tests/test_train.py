@@ -3,6 +3,7 @@ import torch
 
 from secora.models import *
 from secora.train import *
+from secora.tracking import *
 
 import tempfile
 import yaml
@@ -57,6 +58,24 @@ def get_model_inputs():
     inputs  = input_ids, attention_mask
     return inputs
 
+
+@pytest.fixture
+def get_model_input_dict():
+    input_ids = torch.ones([512], dtype=torch.int64)
+    attention_mask = torch.zeros([512], dtype=torch.int64)
+
+    inputs  = {'input_ids':input_ids, 'attention_mask': attention_mask}
+    return inputs
+
+
+@pytest.fixture
+def get_mock_trainloader(get_model_input_dict):
+    return torch.utils.data.DataLoader(
+            [ get_model_input_dict ] * 1000,
+            batch_size=2
+            )
+
+
 @pytest.mark.slow
 def test_embeddingmodel():
     embsize = 128
@@ -65,10 +84,8 @@ def test_embeddingmodel():
     input_ids = torch.ones([1,512], dtype=torch.int64)
     attention_mask = torch.zeros([1,512], dtype=torch.int64)
     outputs = model(input_ids, attention_mask)
-    print('hello')
     assert outputs.shape == torch.Size([1, embsize])
     # normalization of output vectors
-    print(torch.mean(outputs))
     assert all(torch.mean(outputs, dim=-1) < 1.)
 
 
@@ -83,22 +100,11 @@ def test_train_main():
         with tempfile.TemporaryDirectory() as tmpdirname:
             example_config_yaml['logdir'] = tmpdirname
             example_config_yaml['checkpoint_dir'] = tmpdirname
-            print(example_config_yaml)
             yaml.safe_dump(example_config_yaml, tmpconf)
 
             testargs = ['/root/secora/secora/train.py', tmpconf.name, '--name=distilroberta', '--debug']
             main(testargs)
 
-@pytest.fixture
-def get_model_inputs():
-    input_ids = torch.ones([1,512], dtype=torch.int64)
-    attention_mask = torch.zeros([1,512], dtype=torch.int64)
-
-    inputs  = input_ids, attention_mask
-    return inputs
-
-
-import torch
 
 class BaseModel(Enum):
     CODEBERT = 'microsoft/codebert-base'
@@ -132,9 +138,65 @@ def test_train_shard_simple_step():
     optim.zero_grad()
 
 
+class MockScheduler:
+    def step(self,):
+        pass
+    def get_last_lr(self):
+        return [0.1]
+
+
 @pytest.mark.slow
 @pytest.mark.cuda
-def test_train_shard_simple_step():
+def test_train_step(get_mock_trainloader):
+    cache = GCache()
+    shard_step = 0
+    shard_done = False
+    step = 0
+    rank = 0
+
+    model = EmbeddingModel(BaseModel.DISTILROBERTA, 768, hidden_dropout_prob=0.5).to(rank)
+    optim = torch.optim.Adam(model.parameters())
+
+    config = {'amp': AMP.DISABLE, 'temp': 0.1, 'grad_clip': 0}
+
+    from torch.cuda.amp import autocast, GradScaler
+
+    state_tracker = {
+            'optimizer': optim, 
+            'scheduler': MockScheduler(),
+            'model': model,
+            'training_progress': TrainingProgress,
+            'scaler': GradScaler()
+            }
+
+    kwargs = {'rank': 0, 'distributed': False}
+
+    forward_1 = model
+    forward_2 = model
+    loss_fn = lambda a,b: contrastive_loss(a, b, temp=0.05)
+
+
+    '''
+    train_loader = torch.utils.data.DataLoader(
+            [torch.ones([1, 256]) for i in range(1000)],
+            batch_size=2
+            )
+            '''
+
+
+    loss, shard_done = train_step(
+            deviceloader(get_mock_trainloader, rank),
+            state_tracker,
+            config,
+            **kwargs)
+
+    assert loss.to('cpu').detach().numpy() > 0
+    assert shard_done == False
+
+
+@pytest.mark.slow
+@pytest.mark.cuda
+def test_train_shard_grad():
     step = 0
     rank = 0
     batch = {"input_ids": torch.ones([1,256], dtype=torch.int64, device=rank),
