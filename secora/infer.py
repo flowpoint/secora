@@ -10,31 +10,24 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.distributed as dist
 
-from tqdm import tqdm
+#from tqdm import tqdm
 
 from secora.losses import mrr
 from secora.data import deviceloader, LANGUAGES, get_loader
 
 
-def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', output_device='cpu', **kwargs):
+def build_embedding_space(model, data_loader, embedding_size, feature_prefix='', device='cpu', output_device='cpu', **kwargs):
     ''' the embeddings are calculated on device
     the embedding space is collected on the output_device
     '''
-    embedding_size = model.embedding_size
+
+    display = kwargs['display']
 
     batch_size = data_loader.batch_size
     dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=output_device)
-
-    show_bar = (device in ['cpu', 0] or not dist.is_initialized()) and kwargs.get('progress', False)
-
-    bar = tqdm(
-            total=len(data_loader), 
-            unit=' batch', 
-            desc=f'building embeddings: {feature_prefix}', 
-            smoothing=0.03,
-            disable=not show_bar)
+    display.start_embedding(len(data_loader), feature_prefix)
 
     for i, batch in enumerate(deviceloader(data_loader, device)):
         model_inputs = (
@@ -46,7 +39,7 @@ def build_embedding_space(model, data_loader, feature_prefix='', device='cpu', o
 
         sample_embedding = model(*model_inputs)
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach().to(output_device)
-        bar.update(n=1)
+        display.step_embedding()
 
     return embedding_space
 
@@ -127,8 +120,9 @@ def k_nearest_neighbors(
         return None, None
 
 
-def validate_lang(model, lang, valid_set, config, writer, training_progress, num_distractors=1000, **kwargs):
-    embsize = model.embedding_size
+def validate_lang(model, lang, valid_set, config, training_progress, num_distractors=1000, **kwargs):
+    metriclogger = kwargs['metriclogger']
+    embedding_size = config['embedding_size'] 
 
     lang_set = valid_set.filter(lambda x: x['language'] == lang)
     if len(lang_set) < num_distractors:
@@ -137,8 +131,8 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
 
     loader = get_loader(lang_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
 
-    c_emb = build_embedding_space(model, loader, feature_prefix='code_', device=rank, **kwargs)
-    d_emb = build_embedding_space(model, loader, feature_prefix='doc_', device=rank, **kwargs)
+    c_emb = build_embedding_space(model, loader, embedding_size, feature_prefix='code_', device=rank, **kwargs)
+    d_emb = build_embedding_space(model, loader, embedding_size, feature_prefix='doc_', device=rank, **kwargs)
 
     code_embedding = gather(c_emb)
     doc_embedding = gather(d_emb)
@@ -146,7 +140,6 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
     torch.cuda.synchronize()
     dist.barrier()
     logger = kwargs['logger']
-
 
     # run knn on cpu, it uses internal multithreading anyawy
     if rank == 0:
@@ -157,9 +150,8 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
         mrr_distractors = np.zeros([num_chunks])
         dists_distractors = np.zeros([num_chunks])
 
-        print(code_embedding[:num_chunks].shape)
-        c_chunks = (code_embedding[:num_chunks*num_distractors]).reshape([num_chunks, num_distractors, embsize])
-        d_chunks = (doc_embedding[:num_chunks*num_distractors]).reshape([num_chunks, num_distractors, embsize])
+        c_chunks = (code_embedding[:num_chunks*num_distractors]).reshape([num_chunks, num_distractors, embedding_size])
+        d_chunks = (doc_embedding[:num_chunks*num_distractors]).reshape([num_chunks, num_distractors, embedding_size])
         
         relevant_ids = range(num_distractors)
         for i in range(num_chunks):
@@ -189,14 +181,14 @@ def validate_lang(model, lang, valid_set, config, writer, training_progress, num
                 samples.append(json.dumps({'url':u, 'lang':l}))
 
         global_step = training_progress.optimizer_step
-        writer.add_embedding(code_embedding, metadata=samples, tag=f'{lang}_code', global_step=global_step)
-        writer.add_embedding(doc_embedding, metadata=samples, tag=f'{lang}_doc', global_step=global_step)
+        metriclogger.add_embedding(code_embedding, metadata=samples, tag=f'{lang}_code', global_step=global_step)
+        metriclogger.add_embedding(doc_embedding, metadata=samples, tag=f'{lang}_doc', global_step=global_step)
 
         logger.debug('log mrr')
-        writer.add_scalar(f"mrr/validation/{lang}", lang_score, global_step)
+        metriclogger.add_scalar(f"mrr/validation/{lang}", lang_score, global_step)
         logger.debug('log validation')
-        writer.add_scalar(f"distances/validation/{lang}", lang_dists, global_step)
-        writer.flush()
+        metriclogger.add_scalar(f"distances/validation/{lang}", lang_dists, global_step)
+        metriclogger.flush()
 
         return lang_score, lang_dists
     else:
@@ -207,7 +199,6 @@ def validate(
         model, 
         valid_set, 
         config, 
-        writer,
         training_progress,
         **kwargs):
 
@@ -215,6 +206,7 @@ def validate(
     rank = dist.get_rank()
 
     logger = kwargs['logger']
+    metriclogger = kwargs['metriclogger']
 
     if config['languages'] == ['all']:
         langs = LANGUAGES
@@ -232,7 +224,7 @@ def validate(
     with model.no_sync():
         with torch.no_grad():
             for lang in langs:
-                l_score, l_dists = validate_lang(model, lang, valid_set, config, writer, training_progress, num_distractors=num_distractors, **kwargs)
+                l_score, l_dists = validate_lang(model, lang, valid_set, config, training_progress, num_distractors=num_distractors, **kwargs)
                 scores.append(l_score)
                 dists.append(l_dists)
 
@@ -244,10 +236,10 @@ def validate(
         global_step = training_progress.optimizer_step
 
         logger.debug('log mrr')
-        writer.add_scalar(f"mrr/validation/lang_avg", m_avg_score, global_step)
+        metriclogger.add_scalar(f"mrr/validation/lang_avg", m_avg_score, global_step)
         logger.debug('log validation')
-        writer.add_scalar(f"distances/validation/lang_avg", m_avg_dist, global_step)
-        writer.flush()
+        metriclogger.add_scalar(f"distances/validation/lang_avg", m_avg_dist, global_step)
+        metriclogger.flush()
 
     dist.barrier()
 

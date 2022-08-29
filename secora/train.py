@@ -16,7 +16,6 @@ import numpy as np
 from tqdm import tqdm
 
 import torch
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.utils import clip_grad_norm_
@@ -38,8 +37,9 @@ from secora.config import *
 from secora.infer import validate
 from secora.losses import contrastive_loss, mrr
 import secora.losses as losses #.LOSS_TEMPERATURE
-from secora.tracking import *
+from secora.tracking import * # init_storage
 from secora.display import Display
+from secora.metrics import MetricLogger
 
 import datasets
 from SM3 import SM3
@@ -276,7 +276,6 @@ def train_shard(
         state_tracker,
         train_loader,
         config,
-        writer=None,
         grad_accum=1,
         **kwargs
         ):
@@ -287,6 +286,7 @@ def train_shard(
     training_progress = state_tracker['training_progress']
     display = kwargs['display']
     display.start_shard(len(train_loader))
+    metriclogger = kwargs['metriclogger']
 
     shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
     shard_step = 0
@@ -299,22 +299,15 @@ def train_shard(
                 config, 
                 **kwargs)
 
-        #bar.update(n=1)
         display.step_shard()
         shard_step += 1
 
-        '''
-        if rank == 0 and time() - heartbeat > 60:
-            logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {training_progress.optimizer_step}")
-            heartbeat = time()
-        '''
-
         if rank == 0:
-            writer.add_scalar(
+            metriclogger.add_scalar(
                     "learning_rate/train", 
                     scheduler.get_last_lr()[0], 
                     training_progress.optimizer_step)
-            writer.flush()
+            metriclogger.flush()
 
         shard_loss.add_(loss.detach())
         shard_step += 1
@@ -324,8 +317,8 @@ def train_shard(
     dist.barrier()
     if rank == 0:
         avg_loss = shard_loss.cpu().numpy() / shard_step
-        writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
-        writer.flush()
+        metriclogger.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
+        metriclogger.flush()
 
 def hw_warmup(model, train_set, **kwargs):
     ''' 
@@ -362,45 +355,25 @@ def hw_optimize(model, **kwargs):
         torch.cuda.synchronize()
         dist.barrier()
 
+def distribute_model(model, **kwargs):
+    kwargs['logger'].info('building distributed model')
+    return DDP(model, device_ids=[kwargs['rank']], find_unused_parameters=True)
 
-def train(config, preempt_callback=None, **kwargs):
-    rank = kwargs['rank']
-    torch.autograd.set_detect_anomaly(True)
-    if rank == 0:
-        writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-
-    logger = kwargs['logger']
-    logger.info('started train function')
-
-    if kwargs['debug'] == True:
-        t_limit = 20*config['grad_accum']*config['batch_size']
-        v_limit = 20*config['grad_accum']*config['batch_size']
-    else:
-        t_limit = 200000
-        v_limit = 50000
-
-    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
-    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
-
-    logger.info('building model')
-
-    m = build_model(config, rank)
-    hw_warmup(m, train_set, config=config, **kwargs)
-    hw_optimize(m, config=config, **kwargs)
-
-    logger.info('building DDP model')
-    model = DDP(m, device_ids=[rank], find_unused_parameters=True)
-    model.embedding_size = m.embedding_size
-
-    if config['finetune_mode'] == FinetuneMode.ALL:
+def build_optimizer(config, model):
+    mode = config['finetune_mode']
+    if mode == FinetuneMode.ALL:
         params = model.parameters()
-    elif config['finetune_mode'] == FinetuneMode.POOLING:
+    elif mode == FinetuneMode.POOLING:
         params = model.pooling.parameters()
+    else:
+        raise RuntimeError(f'invalid finetune_mode {mode}')
 
     optim = _optimizer_mapping[config['optimizer'].value](params, lr=config['learning_rate'])
+    return optim
 
+def build_scheduler(optim, config, train_set_len):
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
-    num_training_steps_per_epoch = ceil(len(train_set) / (config['batch_size'] * config['grad_accum']))
+    num_training_steps_per_epoch = ceil(train_set_len / (config['batch_size'] * config['grad_accum']))
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
 
     if config['lr_schedule'] == ScheduleEnum.LINEAR:
@@ -414,8 +387,39 @@ def train(config, preempt_callback=None, **kwargs):
                 num_warmup_steps=num_warmup_steps
                 )
 
-    scaler = GradScaler()
+    return scheduler
 
+def train(config, preempt_callback=None, **kwargs):
+    rank = kwargs['rank']
+    torch.autograd.set_detect_anomaly(True)
+    #if rank == 0:
+    #    writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
+
+    logger = kwargs['logger']
+    logger.info('started train function')
+
+    if kwargs['debug'] == True:
+        t_limit = 20*config['grad_accum']*config['batch_size']
+        v_limit = 20*config['grad_accum']*config['batch_size']
+    else:
+        t_limit = 200000
+        v_limit = 50000
+
+    # training blocks
+    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+
+    # initialize state
+    m = build_model(config, **kwargs)
+
+    # this should soon be rather done after the training initialization
+    hw_warmup(m, train_set, config=config, **kwargs)
+    hw_optimize(m, config=config, **kwargs)
+
+    model = distribute_model(m, **kwargs)
+    optim = build_optimizer(config, model)
+    scheduler = build_scheduler(optim, config, len(train_set))
+    scaler = GradScaler()
     training_progress = TrainingProgress()
     state_tracker = StateTracker(
             config['name'],
@@ -442,22 +446,17 @@ def train(config, preempt_callback=None, **kwargs):
         num_shards = config['shards']
         grad_accum = config['grad_accum']
 
-    logger.info(f'shard_size: {len(train_set)/num_shards} samples')
+    logger.info(f'shard_size: {len(train_set)//num_shards} samples')
     logger.info(f'validation set size: {len(valid_set)} samples')
-
-    rank = dist.get_rank()
-
     logger.info(f'starting training')
 
     # do one validation pass with the base model
-    '''
     score = validate(state_tracker['model'], 
             valid_set, 
             config, 
-            writer, 
             state_tracker['training_progress'],
             **kwargs)
-            '''
+            #writer, 
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -473,7 +472,6 @@ def train(config, preempt_callback=None, **kwargs):
                 state_tracker,
                 train_loader,
                 config,
-                writer,
                 grad_accum=grad_accum,
                 **kwargs
                 )
@@ -484,9 +482,9 @@ def train(config, preempt_callback=None, **kwargs):
             score = validate(state_tracker['model'], 
                     valid_set, 
                     config, 
-                    writer, 
                     state_tracker['training_progress'],
                     **kwargs)
+                    #writer, 
 
             training_progress.shard_done()
 
@@ -501,7 +499,7 @@ def train(config, preempt_callback=None, **kwargs):
         training_progress.epoch_done()
 
     if 'hparam_callback' in kwargs and rank == 0:
-        kwargs['hparam_callback'](writer, score)
+        kwargs['hparam_callback'](kwargs['metriclogger'], score)
 
     return score
 
@@ -509,30 +507,21 @@ def training_worker(rank, config, progress, debug):
     world_size = config['num_gpus']
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
-
-    if rank == 0:
-        logdir = os.path.join(config['logdir'], config['name'])
-        checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
-        os.makedirs(logdir, exist_ok=True)
-        os.makedirs(checkdir, exist_ok=True)
-
-        path = os.path.join(config['logdir'], config['name'], 'config.yml')
-        with open(path, 'w') as f:
-            f.write(yaml.dump(config.to_dict()))
-
-    logger = make_logger(config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
 
-    display = Display(progress=progress, rank=rank)
-
-    train(config, display=display, progress=progress, debug=debug, logger=logger, rank=rank)
+    init_storage(config, rank)
+    logger = make_logger(config, debug=debug, rank=rank)
+    display = Display(show_progress=progress, rank=rank)
+    metriclogger = MetricLogger(config, rank)
+    logger.info(f'starting run with name: {config["name"]}')
+    train(config, display=display, metriclogger=metriclogger, progress=progress, debug=debug, logger=logger, rank=rank)
 
     torch.cuda.synchronize()
     dist.barrier(group=dist.group.WORLD)
     dist.destroy_process_group()
 
 
-def clean_init(seed):
+def rng_init(seed):
     torch.cuda.empty_cache()
     np.random.seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -573,15 +562,8 @@ def main(argv):
 
     timestamp = str(ceil(time()))
     config = build_config(config_id=timestamp, args=args)
-    clean_init(seed=config['seed'])
+    rng_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
-
-    '''
-    if args.progress:
-        datasets.enable_progress_bar()
-    else:
-        datasets.disable_progress_bar()
-            '''
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

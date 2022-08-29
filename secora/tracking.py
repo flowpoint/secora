@@ -8,6 +8,19 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+import yaml
+
+def init_storage(config, rank):
+    if rank == 0:
+        logdir = os.path.join(config['logdir'], config['name'])
+        checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
+        os.makedirs(logdir, exist_ok=True)
+        os.makedirs(checkdir, exist_ok=True)
+
+        path = os.path.join(config['logdir'], config['name'], 'config.yml')
+        with open(path, 'w') as f:
+            f.write(yaml.dump(config.to_dict()))
+
 
 def make_logger(config, debug=False, rank=-1):
     if debug == True:

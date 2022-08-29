@@ -99,8 +99,12 @@ class EmbeddingModelCuda(torch.nn.Module):
         with autocast(enabled=(self.amp != AMP.DISABLE), **tp):
             return self.m(input_ids, attention_mask, *args, **kwargs)
 
-def build_model(config, rank):
+def build_model(config, **kwargs):
     ''' unified function for building a model according to config '''
+    logger = kwargs['logger']
+    rank = kwargs['rank']
+    logger.info('building model')
+
     model_args = (config['model_name'], config['embedding_size'], config['amp'])
     model_kwargs = {'hidden_dropout_prob': config['dropout']}
     if config['num_gpus'] > 0:

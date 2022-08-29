@@ -4,6 +4,9 @@ import pytest
 import torch
 from datasets import Dataset
 
+'''
+by default run all testcombinations, just to be sure
+'''
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -14,24 +17,41 @@ def pytest_addoption(parser):
         "--nocuda", action="store_true", default=False, help="don't run cuda dependent tests"
     )
 
+    # run only the heaviest tests (model+gpu test)
+    # invoke sequentially
+    parser.addoption(
+        "--nosimple", action="store_true", default=False, help="don't run unmarked simple tests"
+    )
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "cuda: marks tests to require cuda")
 
 
 def pytest_collection_modifyitems(config, items):
+    complex_markers = []
+
     if config.getoption("--fastonly"):
         skip_slow = pytest.mark.skip(reason="--fastonly option is true, skipping slow tests")
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
 
+    complex_markers.append('cuda')
     if config.getoption("--nocuda"):
         skip_cuda = pytest.mark.skip(reason="--nocuda is true, skipping cuda tests")
 
         for item in items:
             if "cuda" in item.keywords:
                 item.add_marker(skip_cuda)
+
+
+    if config.getoption("--nosimple"):
+        skip_simple = pytest.mark.skip(reason="--nosimple is true, skipping simple tests")
+
+        for item in items:
+            if not any([marker in item.keywords for marker in complex_markers]):
+                item.add_marker(skip_simple)
 
 
 class MockModel(torch.nn.Module):
