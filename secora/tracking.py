@@ -24,7 +24,7 @@ def make_logger(config, debug=False, rank=-1):
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    path = os.path.join(config['logdir'], config['name'], 'run.log')
+    path = os.path.join(config['logdir'], config['name'], f'run_rank{rank}.log')
 
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()

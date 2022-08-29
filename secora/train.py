@@ -35,10 +35,11 @@ import secora.models as models
 from secora.data import *
 from secora import data
 from secora.config import *
-from secora.infer import build_embedding_space, k_nearest_neighbors, validate
+from secora.infer import validate
 from secora.losses import contrastive_loss, mrr
 import secora.losses as losses #.LOSS_TEMPERATURE
 from secora.tracking import *
+from secora.display import Display
 
 import datasets
 from SM3 import SM3
@@ -100,6 +101,7 @@ class TrainingConfig(SimpleConfig):
             IntSetting('epochs', lb=1),
             IntSetting('shards', lb=1),
             IntSetting('grad_accum', lb=1),
+            IntSetting('grad_cache', lb=1),
             IntSetting('warmup_batches',lb=0),
             FloatSetting('temp', lb=0., ub=1.),
             IntSetting('top_k', lb=0),
@@ -139,6 +141,7 @@ class GCache:
     cache_2: list = field(default_factory=list)
     closures_1: list = field(default_factory=list)
     closures_2: list = field(default_factory=list)
+
 
 def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
     ''' the cache is side effected '''
@@ -186,7 +189,6 @@ def train_step(
         train_loader,
         state_tracker,
         config, 
-        rank,
         **kwargs):
     ''' the necessary accumulation/gradcache steps 
     until and including one optimizer step 
@@ -203,6 +205,7 @@ def train_step(
     training_progress = state_tracker['training_progress']
     scaler = state_tracker['scaler']
     model = state_tracker['model']
+    rank = kwargs['rank']
 
     model.train()
 
@@ -216,7 +219,7 @@ def train_step(
         optim.step()
         optim.zero_grad(set_to_none=True)
 
-    if grad_cache == True:
+    if config['grad_cache'] == True:
         fns = gradcache_fns(forward_1, forward_2, loss_fn, optimize, cache)
         forward_1, forward_2, loss_fn, optimize = fns
 
@@ -234,8 +237,6 @@ def train_step(
             emb1 = forward_1(*model_inputs)
         emb2 = forward_2(*model_inputs)
         loss = loss_fn(emb1, emb2)
-        print('loss')
-        print(loss)
 
         if config['amp'] != AMP.DISABLE:
             loss = scaler.scale(loss)
@@ -284,41 +285,29 @@ def train_shard(
     logger = kwargs['logger']
     scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
+    display = kwargs['display']
+    display.start_shard(len(train_loader))
 
-    if rank == 0:
-        bar = tqdm(
-            total=len(train_loader), 
-            unit=' batch', 
-            desc='train_shard', 
-            smoothing=0.03,
-            disable=not kwargs.get('progress', False))
-
-    heartbeat = time()
-
-    grad_cache = True
-    #grad_cache = False
-    if grad_cache:
-        grad_accum=1
-
-    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=false)
+    shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
     shard_step = 0
-    shard_done = false
+    shard_done = False
 
-    while shard_done == false:
+    while shard_done == False:
         loss, shard_done = train_step(
                 deviceloader(train_loader, rank),
                 state_tracker,
-                cache,
                 config, 
-                rank, 
                 **kwargs)
 
-        bar.update(n=1)
+        #bar.update(n=1)
+        display.step_shard()
         shard_step += 1
 
+        '''
         if rank == 0 and time() - heartbeat > 60:
             logger.info(f"heartbeat: training: epoch: {training_progress.epoch} shard: {training_progress.shard} step: {training_progress.optimizer_step}")
             heartbeat = time()
+        '''
 
         if rank == 0:
             writer.add_scalar(
@@ -338,9 +327,44 @@ def train_shard(
         writer.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         writer.flush()
 
+def hw_warmup(model, train_set, **kwargs):
+    ''' 
+    warmup hardware and accelerators
+    collects data for lower level optimization algorithms
+    done separately before training for reproducability with changing hw setups
+
+    train_set needs to be without sideeffects when reading it
+    '''
+
+    logger = kwargs['logger']
+    config = kwargs['config']
+    rank = kwargs['rank']
+    logger.info('warming up cuda benchmark')
+    train_loader = get_loader(train_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
+    for step, batch in zip(range(12), deviceloader(train_loader, rank)):
+        model_inputs = batch['input_ids'], batch['attention_mask']
+        model(*model_inputs)
+        torch.cuda.synchronize()
+        dist.barrier()
+
+
+def hw_optimize(model, **kwargs):
+    '''
+    use the warmup statistics to optimize performance before starting training
+    '''
+
+    config = kwargs['config']
+    if config['cuda_graphs'] == True:
+        logger.info('cuda_graphs is True: building the cuda graph')
+        torch.cuda.synchronize()
+        dist.barrier()
+        model.make_graphed(model_inputs)
+        torch.cuda.synchronize()
+        dist.barrier()
+
 
 def train(config, preempt_callback=None, **kwargs):
-    rank = dist.get_rank()
+    rank = kwargs['rank']
     torch.autograd.set_detect_anomaly(True)
     if rank == 0:
         writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
@@ -359,26 +383,10 @@ def train(config, preempt_callback=None, **kwargs):
     valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
 
     logger.info('building model')
-    if config['num_gpus'] > 0:
-        m = EmbeddingModelCuda(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
-    else:
-        m = EmbeddingModel(config['model_name'], config['embedding_size'], config['amp'], hidden_dropout_prob=config['dropout']).to(rank)
 
-    logger.info('warming up cuda benchmark')
-    train_loader = get_loader(train_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
-    for step, batch in zip(range(12), deviceloader(train_loader, rank)):
-        model_inputs = batch['input_ids'], batch['attention_mask']
-        m(*model_inputs)
-        torch.cuda.synchronize()
-        dist.barrier()
-
-    if config['cuda_graphs'] == True:
-        logger.info('cuda_graphs is True: building the cuda graph')
-        torch.cuda.synchronize()
-        dist.barrier()
-        m.make_graphed(model_inputs)
-        torch.cuda.synchronize()
-        dist.barrier()
+    m = build_model(config, rank)
+    hw_warmup(m, train_set, config=config, **kwargs)
+    hw_optimize(m, config=config, **kwargs)
 
     logger.info('building DDP model')
     model = DDP(m, device_ids=[rank], find_unused_parameters=True)
@@ -420,7 +428,7 @@ def train(config, preempt_callback=None, **kwargs):
             scaler=scaler,
             training_progress=training_progress)
 
-    if kwargs.get('debug',False) == True:
+    if kwargs.get('debug', False) == True:
         num_epochs = 2
         num_shards = 2
         grad_accum = 1
@@ -442,12 +450,14 @@ def train(config, preempt_callback=None, **kwargs):
     logger.info(f'starting training')
 
     # do one validation pass with the base model
+    '''
     score = validate(state_tracker['model'], 
             valid_set, 
             config, 
             writer, 
             state_tracker['training_progress'],
             **kwargs)
+            '''
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -495,7 +505,6 @@ def train(config, preempt_callback=None, **kwargs):
 
     return score
 
-
 def training_worker(rank, config, progress, debug):
     world_size = config['num_gpus']
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
@@ -514,7 +523,9 @@ def training_worker(rank, config, progress, debug):
     logger = make_logger(config, debug=debug, rank=rank)
     torch.cuda.set_device(rank)
 
-    train(config, progress=progress, debug=debug, logger=logger)
+    display = Display(progress=progress, rank=rank)
+
+    train(config, display=display, progress=progress, debug=debug, logger=logger, rank=rank)
 
     torch.cuda.synchronize()
     dist.barrier(group=dist.group.WORLD)
@@ -565,10 +576,12 @@ def main(argv):
     clean_init(seed=config['seed'])
     torch.backends.cudnn.benchmark = True
 
+    '''
     if args.progress:
         datasets.enable_progress_bar()
     else:
         datasets.disable_progress_bar()
+            '''
 
     mp.set_start_method('spawn')
     mp.spawn(training_worker, 

@@ -68,6 +68,8 @@ class EmbeddingModel(torch.nn.Module):
 
 class EmbeddingModelCuda(torch.nn.Module):
     def __init__(self, basemodel: BaseModel, embsize: int, amp: AMP, **kwargs):
+        ''' wraps an Embeddingmodel to work faster with cuda acceleration
+        '''
         super().__init__()
         self.m = EmbeddingModel(basemodel, embsize, **kwargs)
         self.amp = amp
@@ -96,6 +98,16 @@ class EmbeddingModelCuda(torch.nn.Module):
             tp = {'dtype': _precision_map[self.amp.value]}
         with autocast(enabled=(self.amp != AMP.DISABLE), **tp):
             return self.m(input_ids, attention_mask, *args, **kwargs)
+
+def build_model(config, rank):
+    ''' unified function for building a model according to config '''
+    model_args = (config['model_name'], config['embedding_size'], config['amp'])
+    model_kwargs = {'hidden_dropout_prob': config['dropout']}
+    if config['num_gpus'] > 0:
+        m = EmbeddingModelCuda(*model_args, **model_kwargs).to(rank)
+    else:
+        m = EmbeddingModel(*model_args, **model_kwargs).to(rank)
+    return m
 
 
 def get_model(checkpoint_path, embsize, device):

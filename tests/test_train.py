@@ -42,6 +42,7 @@ lr_schedule: constant
 learning_rate: 1e-5
 batch_size: 2
 grad_accum: 64 # counted in batches
+grad_cache: 1 # counted in batches
 temp: 0.05
 dropout: 0.1
 grad_clip: 0.0
@@ -54,7 +55,6 @@ top_k:  1000
 def get_model_inputs():
     input_ids = torch.ones([1,512], dtype=torch.int64)
     attention_mask = torch.zeros([1,512], dtype=torch.int64)
-
     inputs  = input_ids, attention_mask
     return inputs
 
@@ -87,23 +87,6 @@ def test_embeddingmodel():
     assert outputs.shape == torch.Size([1, embsize])
     # normalization of output vectors
     assert all(torch.mean(outputs, dim=-1) < 1.)
-
-
-# just try to run the mainloop on a single gpu
-@pytest.mark.slow
-@pytest.mark.cuda
-@pytest.mark.skip(reason='currently broken, creating tests to find error')
-def test_train_main():
-    example_config_yaml = yaml.safe_load(example_config)
-
-    with tempfile.NamedTemporaryFile('w') as tmpconf:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            example_config_yaml['logdir'] = tmpdirname
-            example_config_yaml['checkpoint_dir'] = tmpdirname
-            yaml.safe_dump(example_config_yaml, tmpconf)
-
-            testargs = ['/root/secora/secora/train.py', tmpconf.name, '--name=distilroberta', '--debug']
-            main(testargs)
 
 
 class BaseModel(Enum):
@@ -157,7 +140,7 @@ def test_train_step(get_mock_trainloader):
     model = EmbeddingModel(BaseModel.DISTILROBERTA, 768, hidden_dropout_prob=0.5).to(rank)
     optim = torch.optim.Adam(model.parameters())
 
-    config = {'amp': AMP.DISABLE, 'temp': 0.1, 'grad_clip': 0}
+    config = {'amp': AMP.DISABLE, 'temp': 0.1, 'grad_clip': 0, 'batch_size': 2, 'grad_cache':1}
 
     from torch.cuda.amp import autocast, GradScaler
 
@@ -174,15 +157,6 @@ def test_train_step(get_mock_trainloader):
     forward_1 = model
     forward_2 = model
     loss_fn = lambda a,b: contrastive_loss(a, b, temp=0.05)
-
-
-    '''
-    train_loader = torch.utils.data.DataLoader(
-            [torch.ones([1, 256]) for i in range(1000)],
-            batch_size=2
-            )
-            '''
-
 
     loss, shard_done = train_step(
             deviceloader(get_mock_trainloader, rank),
@@ -218,3 +192,20 @@ def test_train_shard_grad():
     loss.backward()
     optim.step()
     optim.zero_grad()
+
+
+# just try to run the mainloop on a single gpu
+@pytest.mark.slow
+@pytest.mark.cuda
+@pytest.mark.skip(reason='currently broken, creating tests to find error')
+def test_train_main():
+    example_config_yaml = yaml.safe_load(example_config)
+
+    with tempfile.NamedTemporaryFile('w') as tmpconf:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            example_config_yaml['logdir'] = tmpdirname
+            example_config_yaml['checkpoint_dir'] = tmpdirname
+            yaml.safe_dump(example_config_yaml, tmpconf)
+
+            testargs = ['/root/secora/secora/train.py', tmpconf.name, '--name=distilroberta', '--debug']
+            main(testargs)

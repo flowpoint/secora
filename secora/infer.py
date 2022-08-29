@@ -130,7 +130,6 @@ def k_nearest_neighbors(
 def validate_lang(model, lang, valid_set, config, writer, training_progress, num_distractors=1000, **kwargs):
     embsize = model.embedding_size
 
-
     lang_set = valid_set.filter(lambda x: x['language'] == lang)
     if len(lang_set) < num_distractors:
         raise RuntimeError(f'not enough samples for validating, got {len(lang_set)} but needs atleasts {num_distractors}')
