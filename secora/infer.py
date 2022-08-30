@@ -224,7 +224,14 @@ def validate(
     with model.no_sync():
         with torch.no_grad():
             for lang in langs:
-                l_score, l_dists = validate_lang(model, lang, valid_set, config, training_progress, num_distractors=num_distractors, **kwargs)
+                l_score, l_dists = validate_lang(
+                        model, 
+                        lang, 
+                        valid_set, 
+                        config, 
+                        training_progress, 
+                        num_distractors=num_distractors, 
+                        **kwargs)
                 scores.append(l_score)
                 dists.append(l_dists)
 

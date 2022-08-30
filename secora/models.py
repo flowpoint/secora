@@ -1,9 +1,8 @@
 import torch
 from torch import tensor
 
-from transformers import AutoModel, AutoModelForMaskedLM, AutoModelForPreTraining, AutoTokenizer
+from transformers import AutoModel, AutoModelForMaskedLM, AutoModelForPreTraining, AutoTokenizer, RobertaModel, RobertaConfig
 from transformers import PreTrainedModel
-from tokenizers import Tokenizer
 
 from torch.cuda.amp import autocast
 from enum import Enum, auto
@@ -16,6 +15,7 @@ class BaseModel(Enum):
     CODEBERT = 'microsoft/codebert-base'
     ROBERTA = 'roberta-base'
     DISTILROBERTA = 'distilroberta-base'
+    TESTROBERTA = 'testroberta'
 
 
 class AMP(Enum):
@@ -31,21 +31,34 @@ _precision_map = {
         'bf16': torch.bfloat16
         }
 
-DROPOUT_SETTING = FloatSetting('dropout', lb=0., ub=1.)
-BASEMODEL_SETTING = EnumSetting('model_name', BaseModel)
-AMP_SETTING = EnumSetting('amp', AMP)
+def dropout_setting():
+    return FloatSetting('dropout', lb=0., ub=1.)
+
+def basemodel_setting():
+    return EnumSetting('model_name', BaseModel)
+
+def amp_setting():
+    return EnumSetting('amp', AMP)
 
 
 class EmbeddingModel(torch.nn.Module):
     def __init__(self, basemodel: BaseModel, embsize: int, **kwargs):
         super().__init__()
-        self.base_model = AutoModelForMaskedLM.from_pretrained(
-                basemodel.value, **kwargs).base_model
+
+        if basemodel is BaseModel.TESTROBERTA:
+            configuration = RobertaConfig(hidden_size=768, 
+                    num_hidden_layers=12, 
+                    num_attention_heads=12)
+            self.base_model = RobertaModel(configuration)
+
+        else:
+            self.base_model = AutoModelForMaskedLM.from_pretrained(
+                    basemodel.value, **kwargs).base_model
 
         # add a pooling mlp as some models don't have one
         self.embsize = embsize
         self.pooling = torch.nn.Linear(
-                self.base_model.config.hidden_size,
+                self.base_model.config.hidden_size, # type: ignore
                 self.embsize
                 )
         self.activation = torch.nn.Tanh()
@@ -105,7 +118,7 @@ def build_model(config, **kwargs):
     rank = kwargs['rank']
     logger.info('building model')
 
-    model_args = (config['model_name'], config['embedding_size'], config['amp'])
+    model_args = (BaseModel(config['model_name']), config['embedding_size'], AMP(config['amp']))
     model_kwargs = {'hidden_dropout_prob': config['dropout']}
     if config['num_gpus'] > 0:
         m = EmbeddingModelCuda(*model_args, **model_kwargs).to(rank)

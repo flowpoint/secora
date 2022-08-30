@@ -78,7 +78,10 @@ def export_code_embedding(test_set, checkpoint_path, path, device, config):
 
 
 def get_q_emb(model, query_set, config, device):
-    tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
+    if config['model_name'] is BaseModel.TESTROBERTA:
+        tokenizer = AutoTokenizer.from_pretrained(BaseModel.ROBERTA.value)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
 
     def tokenize_fn(batch):
         return tokenizer(

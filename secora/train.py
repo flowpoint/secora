@@ -1,26 +1,20 @@
-import os
 import sys
-import time
+import random
 from time import time
 from enum import Enum, auto
-from dataclasses import dataclass, field
-
 from math import ceil
 import argparse
 import datetime
 import re
+from dataclasses import dataclass, field
 
 from pdb import set_trace as bp
 
 import numpy as np
-from tqdm import tqdm
 
 import torch
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 from torch.nn.utils import clip_grad_norm_
-from torch.cuda.amp import autocast, GradScaler
-from torch.optim import lr_scheduler
+from torch.cuda.amp import GradScaler
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -36,12 +30,10 @@ from secora import data
 from secora.config import *
 from secora.infer import validate
 from secora.losses import contrastive_loss, mrr
-import secora.losses as losses #.LOSS_TEMPERATURE
 from secora.tracking import * # init_storage
 from secora.display import Display
 from secora.metrics import MetricLogger
 
-import datasets
 from SM3 import SM3
 
 import grad_cache.functional
@@ -107,7 +99,7 @@ class TrainingConfig(SimpleConfig):
             IntSetting('top_k', lb=0),
             DirectorySetting('checkpoint_dir'),
             IntSetting('max_checkpoints', lb=0),
-            models.BASEMODEL_SETTING,
+            models.basemodel_setting(),
             FloatSetting('learning_rate', lb=0.),
             EnumSetting('finetune_mode', FinetuneMode),
             data.LanguageSetting('languages'),
@@ -115,9 +107,9 @@ class TrainingConfig(SimpleConfig):
             EnumSetting('preprocess_mode', data.PreprocessMode),
             IntSetting('max_input_tokens', lb=1),
             EnumSetting('optimizer', OptimizerEnum),
-            models.AMP_SETTING,
+            models.amp_setting(),
             EnumSetting('lr_schedule', ScheduleEnum),
-            models.DROPOUT_SETTING,
+            models.dropout_setting(),
             RunNameSetting('name'),
             IntSetting('num_gpus', lb=0),
             BoolSetting('cuda_graphs'),
@@ -180,9 +172,9 @@ def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
 
 
 def should_optimize(step, config):
-    #cache_accum = 512 // config['batch_size']
-    #return (step+1) % cache_accum == 0
-    return True
+    cache_accum = 512 // config['batch_size']
+    return (step+1) % cache_accum == 0
+    #return True
 
 
 def train_step(
@@ -359,11 +351,11 @@ def distribute_model(model, **kwargs):
     kwargs['logger'].info('building distributed model')
     return DDP(model, device_ids=[kwargs['rank']], find_unused_parameters=True)
 
-def build_optimizer(config, model):
-    mode = config['finetune_mode']
-    if mode == FinetuneMode.ALL:
+def build_optimizer(config, model, **kwargs):
+    mode: FinetuneMode = config['finetune_mode']
+    if mode is FinetuneMode.ALL:
         params = model.parameters()
-    elif mode == FinetuneMode.POOLING:
+    elif mode is FinetuneMode.POOLING:
         params = model.pooling.parameters()
     else:
         raise RuntimeError(f'invalid finetune_mode {mode}')
@@ -371,7 +363,7 @@ def build_optimizer(config, model):
     optim = _optimizer_mapping[config['optimizer'].value](params, lr=config['learning_rate'])
     return optim
 
-def build_scheduler(optim, config, train_set_len):
+def build_scheduler(optim, config, train_set_len, **kwargs):
     num_warmup_steps = ceil(config['warmup_batches'] / config['grad_accum'])
     num_training_steps_per_epoch = ceil(train_set_len / (config['batch_size'] * config['grad_accum']))
     num_training_steps = config['epochs'] * num_training_steps_per_epoch
@@ -392,9 +384,6 @@ def build_scheduler(optim, config, train_set_len):
 def train(config, preempt_callback=None, **kwargs):
     rank = kwargs['rank']
     torch.autograd.set_detect_anomaly(True)
-    #if rank == 0:
-    #    writer = SummaryWriter(log_dir=os.path.join(config['logdir'], config['name']), flush_secs=30)
-
     logger = kwargs['logger']
     logger.info('started train function')
 
@@ -503,7 +492,7 @@ def train(config, preempt_callback=None, **kwargs):
 
     return score
 
-def training_worker(rank, config, progress, debug):
+def training_worker(rank, config, progress, debug, args, kwargs):
     world_size = config['num_gpus']
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
@@ -511,10 +500,19 @@ def training_worker(rank, config, progress, debug):
 
     init_storage(config, rank)
     logger = make_logger(config, debug=debug, rank=rank)
+
     display = Display(show_progress=progress, rank=rank)
     metriclogger = MetricLogger(config, rank)
     logger.info(f'starting run with name: {config["name"]}')
-    train(config, display=display, metriclogger=metriclogger, progress=progress, debug=debug, logger=logger, rank=rank)
+    train(config, 
+            *args,
+            display=display, 
+            metriclogger=metriclogger, 
+            progress=progress, 
+            debug=debug, 
+            rank=rank, 
+            logger=logger,
+            *kwargs)
 
     torch.cuda.synchronize()
     dist.barrier(group=dist.group.WORLD)
@@ -523,8 +521,10 @@ def training_worker(rank, config, progress, debug):
 
 def rng_init(seed):
     torch.cuda.empty_cache()
-    np.random.seed(seed)
+    torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed()
     torch.use_deterministic_algorithms(True)
 
 
@@ -557,17 +557,17 @@ def build_config(config_id: str, args=None):
     return config
 
 
-def main(argv):
-    args = parse_args(argv)
+def main(argv, *args, **kwargs):
+    cli_args = parse_args(argv)
 
     timestamp = str(ceil(time()))
-    config = build_config(config_id=timestamp, args=args)
+    config = build_config(config_id=timestamp, args=cli_args)
     rng_init(seed=config['seed'])
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.enabled = False# benchmark = True
 
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
     mp.spawn(training_worker, 
-            args=(config, args.progress, args.debug),
+            args=(config, cli_args.progress, cli_args.debug, args, kwargs),
             nprocs = config['num_gpus'],
             join=True)
 

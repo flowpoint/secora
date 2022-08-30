@@ -8,6 +8,7 @@ import datasets
 from datasets import load_dataset, NamedSplitAll
 from transformers import AutoTokenizer
 from enum import Enum, auto
+from secora.models import BaseModel
 from .config import Setting
 
 import numpy as np
@@ -133,7 +134,10 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
     #datasets.logging.set_progress_bar_enabled(kwargs.get('progress', False))
 
     if tokenizer is None:
-        tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
+        if config['model_name'] is BaseModel.TESTROBERTA:
+            tokenizer = AutoTokenizer.from_pretrained(BaseModel.ROBERTA.value)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(config['model_name'].value)
 
     num_proc = config['preprocess_cores']
 
