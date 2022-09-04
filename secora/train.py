@@ -1,16 +1,11 @@
 import sys
-import random
 from time import time
 from enum import Enum, auto
 from math import ceil
-import argparse
-import datetime
 import re
 from dataclasses import dataclass, field
 
 from pdb import set_trace as bp
-
-import numpy as np
 
 import torch
 from torch.nn.utils import clip_grad_norm_
@@ -33,12 +28,14 @@ from secora.losses import contrastive_loss, mrr
 from secora.tracking import * # init_storage
 from secora.display import Display
 from secora.metrics import MetricLogger
+from secora.train_utils import *
 
 from SM3 import SM3
 
-import grad_cache.functional
-
-TIMEOUT = datetime.timedelta(65)
+'''
+all things regarding a single "training run"
+note that hyperparameter optimization (hparam search) creates multiple "training runs"
+'''
 
 class FinetuneMode(Enum):
     ALL = 'all'
@@ -127,51 +124,9 @@ class TrainingConfig(SimpleConfig):
             # parse through the settings parsing function
             self[k] = self.settings[k].parse(v)
 
-@dataclass
-class GCache:
-    cache_1: list = field(default_factory=list)
-    cache_2: list = field(default_factory=list)
-    closures_1: list = field(default_factory=list)
-    closures_2: list = field(default_factory=list)
-
-
-def gradcache_fns(forward1, forward2, loss_fn, optimize_fn, cache):
-    ''' the cache is side effected '''
-    def cfn1(*args, **kwargs):
-        emb, closure = grad_cache.functional.cached(forward1)(*args, **kwargs)
-        cache.cache_1.append(emb)
-        cache.closures_1.append(closure)
-        return emb
-
-    def cfn2(*args, **kwargs):
-        emb, closure = grad_cache.functional.cached(forward2)(*args, **kwargs)
-        cache.cache_2.append(emb)
-        cache.closures_2.append(closure)
-        return emb
-
-    def lfn(*args, **kwargs):
-        loss = grad_cache.functional.cat_input_tensor(loss_fn)(*args, **kwargs)
-        return loss
-
-    def ofn(*args, **kwargs):
-        for c, v in zip(cache.closures_1, cache.cache_1):
-            c(v)
-        for c, v in zip(cache.closures_2, cache.cache_2):
-            c(v)
-
-        res = optimize_fn(*args, **kwargs)
-
-        cache.cache_1 = []
-        cache.cache_2 = []
-        cache.closures_1 = []
-        cache.closures_2 = []
-
-        return res
-
-    return cfn1, cfn2, lfn, ofn 
-
 
 def should_optimize(step, config):
+    ''' wheter an optimizer step should be run '''
     cache_accum = 512 // config['batch_size']
     return (step+1) % cache_accum == 0
     #return True
@@ -207,12 +162,12 @@ def train_step(
     def loss_fn(a, b):
         return contrastive_loss(a, b, temp=config['temp'])
 
-    def optimize():
+    def optimize(*args, **kwargs):
         optim.step()
         optim.zero_grad(set_to_none=True)
 
     if config['grad_cache'] == True:
-        fns = gradcache_fns(forward_1, forward_2, loss_fn, optimize, cache)
+        fns = gradcache_ify(forward_1, forward_2, loss_fn, optimize, cache)
         forward_1, forward_2, loss_fn, optimize = fns
 
     step = 0
@@ -222,6 +177,7 @@ def train_step(
         try:
             batch = next(deviceloader(train_loader, rank))
         except StopIteration as e:
+            # cant complete the last shard optimizer step with the set batchsize
             return step_loss, True
 
         model_inputs = batch['input_ids'], batch['attention_mask']
@@ -390,7 +346,7 @@ def build_scheduler(optim, config, train_set_len, **kwargs):
 
 def train(config, preempt_callback=None, **kwargs):
     rank = kwargs['rank']
-    torch.autograd.set_detect_anomaly(True)
+    torch.autograd.set_detect_anomaly(kwargs.get('debug', False))
     logger = kwargs['logger']
     logger.info('started train function')
 
@@ -413,9 +369,9 @@ def train(config, preempt_callback=None, **kwargs):
     hw_optimize(m, config=config, **kwargs)
 
     model = distribute_model(m, **kwargs)
+
     optim = build_optimizer(config, model)
     scheduler = build_scheduler(optim, config, len(train_set))
-    scaler = GradScaler()
     training_progress = TrainingProgress()
     state_tracker = StateTracker(
             config['name'],
@@ -425,7 +381,7 @@ def train(config, preempt_callback=None, **kwargs):
             model=model,
             optimizer=optim,
             scheduler=scheduler,
-            scaler=scaler,
+            scaler=GradScaler(),
             training_progress=training_progress)
 
     if kwargs.get('debug', False) == True:
@@ -452,7 +408,6 @@ def train(config, preempt_callback=None, **kwargs):
             config, 
             state_tracker['training_progress'],
             **kwargs)
-            #writer, 
 
     while(training_progress.epoch < num_epochs):
         logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
@@ -480,7 +435,6 @@ def train(config, preempt_callback=None, **kwargs):
                     config, 
                     state_tracker['training_progress'],
                     **kwargs)
-                    #writer, 
 
             training_progress.shard_done()
 
@@ -499,10 +453,11 @@ def train(config, preempt_callback=None, **kwargs):
 
     return score
 
+
 def training_worker(rank, config, progress, debug, args, kwargs):
     world_size = config['num_gpus']
     #os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-    dist.init_process_group('nccl', rank=rank, world_size=world_size, timeout=TIMEOUT)
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
     init_storage(config, rank)
@@ -510,6 +465,7 @@ def training_worker(rank, config, progress, debug, args, kwargs):
 
     display = Display(show_progress=progress, rank=rank)
     metriclogger = MetricLogger(config, rank)
+
     logger.info(f'starting run with name: {config["name"]}')
     train(config, 
             *args,
@@ -524,16 +480,6 @@ def training_worker(rank, config, progress, debug, args, kwargs):
     torch.cuda.synchronize()
     dist.barrier(group=dist.group.WORLD)
     dist.destroy_process_group()
-
-
-def rng_init(seed, deterministic=True):
-    torch.cuda.empty_cache()
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.use_deterministic_algorithms(deterministic)
-    torch.backends.cudnn.enabled = deterministic# benchmark = True
 
 
 def build_config(config_id: str, args=None):
