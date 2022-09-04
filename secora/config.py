@@ -320,15 +320,20 @@ class SimpleConfig:
         return self._settings[name].value
 
     def check(self) -> bool:
+        checks = []
         for k, v in self._settings.items():
-            v.check(v.value)
+            checks.append(v.check(v.value))
+
+        if not all(checks):
+            raise RuntimeError('config checks failed')
+
+        return True
 
     def to_dict(self):
         d = dict()
         for s in self._settings.values():
             d.update(s.to_dict())
         return d
-
 
     def final(self):
         for v in self._settings.values():

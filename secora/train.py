@@ -312,6 +312,7 @@ def train_shard(
         metriclogger.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         metriclogger.flush()
 
+
 def hw_warmup(model, train_set, **kwargs):
     ''' 
     warmup hardware and accelerators
@@ -348,6 +349,12 @@ def hw_optimize(model, **kwargs):
         dist.barrier()
 
 def distribute_model(model, **kwargs):
+    ''' 
+    uses an automatic distribution algorithm to distribute a model architecture 
+    if a certain distribution pattern is wanted, extend this function
+    or write a custom distributed model
+    '''
+
     kwargs['logger'].info('building distributed model')
     return DDP(model, device_ids=[kwargs['rank']], find_unused_parameters=True)
 
@@ -519,13 +526,14 @@ def training_worker(rank, config, progress, debug, args, kwargs):
     dist.destroy_process_group()
 
 
-def rng_init(seed):
+def rng_init(seed, deterministic=True):
     torch.cuda.empty_cache()
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
-    random.seed()
-    torch.use_deterministic_algorithms(True)
+    random.seed(seed)
+    torch.use_deterministic_algorithms(deterministic)
+    torch.backends.cudnn.enabled = deterministic# benchmark = True
 
 
 def build_config(config_id: str, args=None):
@@ -563,7 +571,6 @@ def main(argv, *args, **kwargs):
     timestamp = str(ceil(time()))
     config = build_config(config_id=timestamp, args=cli_args)
     rng_init(seed=config['seed'])
-    torch.backends.cudnn.enabled = False# benchmark = True
 
     #mp.set_start_method('spawn')
     mp.spawn(training_worker, 
@@ -572,17 +579,3 @@ def main(argv, *args, **kwargs):
             join=True)
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description='manual training script.')
-    parser.add_argument('config_file', type=argparse.FileType('r'))
-    # these values override the config values if specified
-    parser.add_argument('--name', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=None)
-    parser.add_argument('--max_checkpoints', type=int, default=None) 
-    parser.add_argument('--debug', action='store_true', default=False)
-    parser.add_argument('--progress', action='store_true', default=False)
-    return parser.parse_args(argv[1:])
-
-
-if __name__ == "__main__":
-    main(sys.argv)
