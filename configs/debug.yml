@@ -1,5 +1,5 @@
-logdir: "/root/secora_output/"
-checkpoint_dir: "/root/secora_output/"
+logdir: "/tmp/secora_output/"
+checkpoint_dir: "/tmp/secora_output/"
 
 # the name has to follow the naming scheme
 # see secora/train.py
@@ -19,7 +19,7 @@ languages:
 
 epochs: 1
 shards: 64
-warmup_batches: 10000
+warmup_batches: 100
 
 finetune_mode: all
 

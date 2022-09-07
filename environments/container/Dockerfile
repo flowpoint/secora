@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     build-essential \
     git \
+    htop \
     subversion \
     python3-dev \
     libffi-dev \

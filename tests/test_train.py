@@ -18,7 +18,7 @@ checkpoint_dir: "/tmp/secora_output/"
 
 # the name has to follow the naming scheme
 # see secora/train.py
-name: 'run_secora_t0_utc00'
+training_run_id: '1'
 seed: 42
 max_checkpoints: 10
 

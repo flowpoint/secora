@@ -9,7 +9,7 @@ from datasets import load_dataset, NamedSplitAll
 from transformers import AutoTokenizer
 from enum import Enum, auto
 from secora.models import BaseModel
-from .config import Setting
+from secora.config import Setting
 
 import numpy as np
 
@@ -94,7 +94,7 @@ def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
     doc = " ".join(sample['func_documentation_tokens'])
     code = " ".join(sample['func_code_tokens'])
 
-    if mode == PreprocessMode.CONCAT:
+    if mode is PreprocessMode.CONCAT:
         trunc_sample = _fair_truncate(tokenizer, doc, code, max_input_tokens)
         tokenized_sample = tokenizer(trunc_sample, padding='max_length', max_length=max_input_tokens, truncation=True)
     else:
@@ -127,6 +127,7 @@ def tokenize_valid_sample(tokenizer, sample, mode, max_input_tokens):
 
 
 def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs):
+    ''' this doens't batch '''
     if kwargs.get('progress', False):
         datasets.enable_progress_bar()
     else:
@@ -176,8 +177,9 @@ def preprocess_split(split, config, limit_samples=None, tokenizer=None, **kwargs
             batched=False,
             num_proc=num_proc)
 
+
     # cast dataset to torch tensors
-    dataset.set_format(type='torch', columns=set(dataset.column_names) - {'url','language'}, output_all_columns=True)
+    dataset.set_format(type='torch', columns=list(set(dataset.column_names) - {'url','language'}), output_all_columns=True)
 
     return dataset
 
@@ -203,10 +205,12 @@ def get_loader(dataset, batch_size, workers=0, dist=False, **kwargs):
     return loader
 
 
-def deviceloader(loader, device):
-    ''' wraps iterable to load samples to device'''
-    for b in loader:
-        for k, v in b.items():
-            if isinstance(v, torch.Tensor):
-                b[k] = v.to(device)
-        yield b
+def batch_to_device(device, batch):
+    ''' for use with map
+    wraps iterable to load samples to device'''
+    res = {}
+    for k, v in batch.items():
+        if isinstance(v, torch.Tensor):
+            res[k] = v.to(device)
+
+    return res

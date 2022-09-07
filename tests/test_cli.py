@@ -5,7 +5,7 @@ import yaml
 from tests.test_train import example_config, MockLogger
 
 from secora.train import *
-from secora.train_cli import parse_args
+from secora.cli import main
 
 def load_main_state(config, **kwargs):
     # unimportant value
@@ -21,7 +21,7 @@ def load_main_state(config, **kwargs):
     training_progress = TrainingProgress()
 
     state_tracker = StateTracker(
-            config['name'],
+            config['training_run_id'],
             config['logdir'],
             config['max_checkpoints'],
             MockLogger(),
@@ -34,10 +34,11 @@ def load_main_state(config, **kwargs):
     return state_tracker
 
 
+'''
 def run_training(argv, *args, **kwargs):
     cli_args = parse_args(argv)
     timestamp = '1'
-    config = build_config(config_id=timestamp, args=cli_args)
+    config = build_config(training_run_id=timestamp, args=cli_args)
     rng_init(seed=config['seed'], deterministic=True)
 
     mp.spawn(training_worker, 
@@ -47,6 +48,7 @@ def run_training(argv, *args, **kwargs):
     state = load_main_state(config, rank=0, logger=MockLogger())
 
     return state
+'''
 
 
 # just try to run the mainloop on a single gpu
@@ -60,8 +62,8 @@ def test_train_main_determinism():
             example_config_yaml['checkpoint_dir'] = tmpdirname
             yaml.safe_dump(example_config_yaml, tmpconf)
 
-            testargs = ['/root/secora/secora/train.py', tmpconf.name, '--debug']
-            state1 = run_training(testargs, logger=MockLogger())
+            testargs = ['/root/secora/secora/cli.py', 'train', 'start' ,tmpconf.name, '--debug']
+            state1 = main(testargs)#, logger=MockLogger())
 
     # start a exactly similarly configured run
     # but in a clean logdir
@@ -72,8 +74,8 @@ def test_train_main_determinism():
             example_config_yaml['checkpoint_dir'] = tmpdirname
             yaml.safe_dump(example_config_yaml, tmpconf)
 
-            testargs = ['/root/secora/secora/train.py', tmpconf.name, '--debug']
-            state2 = run_training(testargs, logger=MockLogger())
+            testargs = ['/root/secora/secora/cli.py', 'train', 'start', tmpconf.name, '--debug']
+            state2 = main(testargs)#, logger=MockLogger())
 
 
     s1 = state1['model'].state_dict() 

@@ -12,12 +12,12 @@ import yaml
 
 def init_storage(config, rank):
     if rank == 0:
-        logdir = os.path.join(config['logdir'], config['name'])
+        logdir = os.path.join(config['logdir'], config['training_run_id'])
         checkdir = logdir #os.path.join(config['checkpoint_dir'], config['name'])
         os.makedirs(logdir, exist_ok=True)
         os.makedirs(checkdir, exist_ok=True)
 
-        path = os.path.join(config['logdir'], config['name'], 'config.yml')
+        path = os.path.join(config['logdir'], config['training_run_id'], 'config.yml')
         with open(path, 'w') as f:
             f.write(yaml.dump(config.to_dict()))
 
@@ -31,13 +31,13 @@ def make_logger(config, debug=False, rank=-1):
     logger = logging.getLogger('secora')
     logger.setLevel(level)
 
-    logdir = os.path.join(config['logdir'], config['name'])
-    checkdir = os.path.join(config['checkpoint_dir'], config['name'])
+    logdir = os.path.join(config['logdir'], config['training_run_id'])
+    checkdir = os.path.join(config['checkpoint_dir'], config['training_run_id'])
 
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(checkdir, exist_ok=True)
 
-    path = os.path.join(config['logdir'], config['name'], f'run_rank{rank}.log')
+    path = os.path.join(config['logdir'], config['training_run_id'], f'run_rank{rank}.log')
 
     fh = logging.FileHandler(path)
     ch = logging.StreamHandler()
@@ -51,7 +51,8 @@ def make_logger(config, debug=False, rank=-1):
 
     if logger.hasHandlers() == False:
         logger.addHandler(fh)
-        logger.addHandler(ch)
+        if debug == True:
+            logger.addHandler(ch)
 
     return logger
 
@@ -132,6 +133,11 @@ class StateTracker:
 @dataclass
 class TrainingProgress:
     ''' epochs and shards that have been begun'''
+    # beware that this is for tracking and resuming training progress
+    # not for tracking metrics
+    # e.g. the total trained samples are a metric
+    # total samples dont match epochs*shard*batch_size because samples in incomplete batches are dropped
+
     # epoch -1 means warmup
     epoch: int = 0
     shard: int = 0 

@@ -14,9 +14,8 @@ def test_build_embedding(mock_model, mock_processed_dataset):
     dl = get_loader(dataset, batch_size=1)
     #split = preproces
     embedding_size = 128
-    d = Display(True)
-    d_embs = build_embedding_space(m, dl, embedding_size, feature_prefix='func_', display=d)
-    c_embs = build_embedding_space(m, dl, embedding_size, feature_prefix='code_', display=d)
+    d_embs = build_embedding_space(m, dl, embedding_size, feature_prefix='func_')
+    c_embs = build_embedding_space(m, dl, embedding_size, feature_prefix='code_')
     assert d_embs.shape == (100, 128)
     assert c_embs.shape == (100, 128)
     

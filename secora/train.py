@@ -4,6 +4,9 @@ from enum import Enum, auto
 from math import ceil
 import re
 from dataclasses import dataclass, field
+from functools import partial
+
+from datasets import load_from_disk
 
 from pdb import set_trace as bp
 
@@ -57,28 +60,16 @@ _optimizer_mapping = {'adam': torch.optim.Adam,
         'sm3': SM3
         }
 
-class RunNameSetting(Setting):
-    ''' enforces a naming scheme for training runs 
-    prefix = run | test | debug | profile
-    readable name = aname0withnumbers
-    trial number = t0
-    start timestamp rounded to upper second = utc1645359851
-    example:
-    name := prefix readable_name trial_number 
-    run_aname0withnumbers_t0_utc1645359851
-    '''
-
-    def __init__(self, name, *args, **kwargs):
+class TrainingRunIDSetting(Setting):
+    def __init__(self, name: str, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
-        self.scheme = re.compile('(run|test|debug|profile)_[a-z][a-z0-9]*_t\d+_utc(\d)+\Z')
 
     @property
     def allowed_type(self):
         return str
 
     def check(self, val):
-        matched = self.scheme.match(val) is not None
-        return matched
+        return True
 
 class TrainingConfig(SimpleConfig):
     def __init__(self):
@@ -107,7 +98,7 @@ class TrainingConfig(SimpleConfig):
             models.amp_setting(),
             EnumSetting('lr_schedule', ScheduleEnum),
             models.dropout_setting(),
-            RunNameSetting('name'),
+            TrainingRunIDSetting('training_run_id'),
             IntSetting('num_gpus', lb=0),
             BoolSetting('cuda_graphs'),
             IntSetting('embedding_size', lb=0),
@@ -127,13 +118,15 @@ class TrainingConfig(SimpleConfig):
 
 def should_optimize(step, config):
     ''' wheter an optimizer step should be run '''
+    #cache_accum = 512 // config['batch_size']
+    #return (step+1) % cache_accum == 0
     cache_accum = 512 // config['batch_size']
     return (step+1) % cache_accum == 0
     #return True
 
 
 def train_step(
-        train_loader,
+        shard_iter,
         state_tracker,
         config, 
         **kwargs):
@@ -154,6 +147,13 @@ def train_step(
     model = state_tracker['model']
     rank = kwargs['rank']
 
+    '''
+    for b in deviceloader(train_loader, rank):
+        return torch.tensor([1.]).to(rank), False
+
+    return torch.tensor([1.]).to(rank), True
+    '''
+
     model.train()
 
     cache = GCache()
@@ -173,12 +173,20 @@ def train_step(
     step = 0
     step_loss = torch.tensor([0.], device=rank)
 
-    while True:
+    #print(len(shard_iter))
+    #print(shard_iter)
+
+    while True:#not should_optimize(step, config) and step < len(train_loader):
         try:
-            batch = next(deviceloader(train_loader, rank))
+            #batch = next(map(partial(batch_to_device, rank), train_loader))
+            batch = next(shard_iter)
         except StopIteration as e:
             # cant complete the last shard optimizer step with the set batchsize
             return step_loss, True
+
+
+        
+        should_break = should_optimize(step, config)
 
         model_inputs = batch['input_ids'], batch['attention_mask']
         with torch.no_grad():
@@ -193,7 +201,7 @@ def train_step(
         loss.backward()
         step += 1
         
-        if should_optimize(step, config) == True:
+        if should_break:
             break
 
     # only sync before optimizer step
@@ -224,7 +232,6 @@ def train_shard(
         state_tracker,
         train_loader,
         config,
-        grad_accum=1,
         **kwargs
         ):
 
@@ -233,32 +240,38 @@ def train_shard(
     scheduler = state_tracker['scheduler']
     training_progress = state_tracker['training_progress']
     display = kwargs['display']
-    display.start_shard(len(train_loader))
     metriclogger = kwargs['metriclogger']
 
     shard_loss = torch.tensor([0.], device=rank, dtype=torch.float64, requires_grad=False)
     shard_step = 0
     shard_done = False
 
-    while shard_done == False:
-        loss, shard_done = train_step(
-                deviceloader(train_loader, rank),
-                state_tracker,
-                config, 
-                **kwargs)
+    logger.debug(f'starting shard {training_progress.shard} of length: {len(train_loader)}')
 
-        display.step_shard()
-        shard_step += 1
+    shard_iter = iter(map(partial(batch_to_device, rank), train_loader))
 
-        if rank == 0:
-            metriclogger.add_scalar(
-                    "learning_rate/train", 
-                    scheduler.get_last_lr()[0], 
-                    training_progress.optimizer_step)
-            metriclogger.flush()
+    with display.start_shard() as step_bar:
+        while shard_done == False:
+            loss, shard_done = train_step(
+                    shard_iter,
+                    state_tracker,
+                    config, 
+                    **kwargs)
 
-        shard_loss.add_(loss.detach())
-        shard_step += 1
+            logger.debug(f'step {shard_step}')
+
+            step_bar.update(config['grad_accum']*config['grad_cache']*config['batch_size'])
+            shard_step += 1
+
+            if rank == 0:
+                metriclogger.add_scalar(
+                        "learning_rate/train", 
+                        scheduler.get_last_lr()[0], 
+                        training_progress.optimizer_step)
+                metriclogger.flush()
+
+            shard_loss.add_(loss.detach())
+            shard_step += 1
 
     dist.all_reduce(shard_loss)
     torch.cuda.synchronize()
@@ -267,6 +280,53 @@ def train_shard(
         avg_loss = shard_loss.cpu().numpy() / shard_step
         metriclogger.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
         metriclogger.flush()
+
+def train_epoch(model, train_set, valid_set, num_shards, training_progress, config, state_tracker, **kwargs):
+    #config = kwargs['config']
+    display = kwargs['display']
+    logger = kwargs['logger']
+    logger.info(f'starting epoch: {training_progress.epoch}')
+    train_set.shuffle()
+
+    with display.start_epoch() as shard_bar:
+        while(training_progress.shard < num_shards):
+            logger.info(f'training shard: {training_progress.shard}')
+
+            shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
+            train_loader = get_loader(shard, config['batch_size'])
+
+            train_shard(
+                state_tracker,
+                train_loader,
+                config,
+                **kwargs
+                )
+
+            logger.info(f'validating shard {training_progress.shard}')
+
+            score = validate(state_tracker['model'], 
+                    valid_set, 
+                    config, 
+                    state_tracker['training_progress'],
+                    **kwargs)
+
+            training_progress.shard_done()
+
+            torch.cuda.synchronize()
+            dist.barrier()
+            if rank == 0:
+                state_tracker.save()
+
+            shard_bar.update()
+
+            if 'preempt_callback' in kwargs:
+                kwargs['preempt_callback'](state_tracker, score, config, **kwargs)
+
+
+    training_progress.epoch_done()
+    train_bar.update()
+
+    return score
 
 
 def hw_warmup(model, train_set, **kwargs):
@@ -283,7 +343,7 @@ def hw_warmup(model, train_set, **kwargs):
     rank = kwargs['rank']
     logger.info('warming up cuda benchmark')
     train_loader = get_loader(train_set, config['batch_size'], workers=0, dist=dist.is_initialized(), **kwargs)
-    for step, batch in zip(range(12), deviceloader(train_loader, rank)):
+    for step, batch in zip(range(12), map(partial(batch_to_device, rank), train_loader)):
         model_inputs = batch['input_ids'], batch['attention_mask']
         model(*model_inputs)
         torch.cuda.synchronize()
@@ -312,7 +372,7 @@ def distribute_model(model, **kwargs):
     '''
 
     kwargs['logger'].info('building distributed model')
-    return DDP(model, device_ids=[kwargs['rank']], find_unused_parameters=True)
+    return DDP(model, device_ids=[kwargs['rank']])#, find_unused_parameters=True)
 
 def build_optimizer(config, model, **kwargs):
     mode: FinetuneMode = config['finetune_mode']
@@ -321,7 +381,7 @@ def build_optimizer(config, model, **kwargs):
     elif mode is FinetuneMode.POOLING:
         params = model.pooling.parameters()
     else:
-        raise RuntimeError(f'invalid finetune_mode {mode}')
+        raise RmuntimeError(f'invalid finetune_mode {mode}')
 
     optim = _optimizer_mapping[config['optimizer'].value](params, lr=config['learning_rate'])
     return optim
@@ -344,7 +404,7 @@ def build_scheduler(optim, config, train_set_len, **kwargs):
 
     return scheduler
 
-def train(config, preempt_callback=None, **kwargs):
+def train(config, preempt_callback=None, cache=True, **kwargs):
     rank = kwargs['rank']
     torch.autograd.set_detect_anomaly(kwargs.get('debug', False))
     logger = kwargs['logger']
@@ -354,12 +414,33 @@ def train(config, preempt_callback=None, **kwargs):
         t_limit = 20*config['grad_accum']*config['batch_size']
         v_limit = 20*config['grad_accum']*config['batch_size']
     else:
-        t_limit = 200000
-        v_limit = 50000
+        t_limit = v_limit = None
+
 
     # training blocks
-    train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
-    valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+
+    logger.info('started preprocessing splits')
+    # data
+    if cache:
+        train_path =  '/tmp/secora_ds/train_set'
+        if os.path.exists(train_path):
+            train_set = load_from_disk(train_path)
+            train_set.set_format(type='torch', columns=list(set(train_set.column_names) - {'url','language'}), output_all_columns=True)
+        else:
+            train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+            train_set.save_to_disk(dataset_path=train_path)
+
+        valid_path =  '/tmp/secora_ds/valid_set'
+        if os.path.exists(valid_path):
+            valid_set = load_from_disk(valid_path)
+            valid_set.set_format(type='torch', columns=list(set(valid_set.column_names) - {'url','language'}), output_all_columns=True)
+        else:
+            valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+            valid_set.save_to_disk(dataset_path=valid_path)
+
+
+    logger.info(f'finished preprocessing splits with train_len: {len(train_set)} valid_len: {len(valid_set)}')
+
 
     # initialize state
     m = build_model(config, **kwargs)
@@ -374,7 +455,7 @@ def train(config, preempt_callback=None, **kwargs):
     scheduler = build_scheduler(optim, config, len(train_set))
     training_progress = TrainingProgress()
     state_tracker = StateTracker(
-            config['name'],
+            config['training_run_id'],
             config['logdir'],
             config['max_checkpoints'],
             logger,
@@ -387,16 +468,19 @@ def train(config, preempt_callback=None, **kwargs):
     if kwargs.get('debug', False) == True:
         num_epochs = 2
         num_shards = 2
-        grad_accum = 1
     else:
         # load latest checkpoint 
+        # resume by default
         torch.cuda.synchronize()
         dist.barrier()
         state_tracker.load_latest()
 
         num_epochs = config['epochs']
         num_shards = config['shards']
-        grad_accum = config['grad_accum']
+
+    display = kwargs['display']
+    num_steps = len(train_set) / (num_epochs * num_shards * config['grad_accum'] * config['grad_cache'] * config['batch_size'])
+    display.set_total(len(train_set), len(valid_set), num_epochs, num_shards, num_steps)
 
     logger.info(f'shard_size: {len(train_set)//num_shards} samples')
     logger.info(f'validation set size: {len(valid_set)} samples')
@@ -409,44 +493,10 @@ def train(config, preempt_callback=None, **kwargs):
             state_tracker['training_progress'],
             **kwargs)
 
-    while(training_progress.epoch < num_epochs):
-        logger.info(f'starting epoch: {training_progress.epoch} of {num_epochs}')
-        train_set.shuffle()
-
-        while(training_progress.shard < num_shards):
-            logger.info(f'training shard: {training_progress.shard}')
-
-            shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-            train_loader = get_loader(shard, config['batch_size'])
-
-            train_shard(
-                state_tracker,
-                train_loader,
-                config,
-                grad_accum=grad_accum,
-                **kwargs
-                )
-
-
-            logger.info(f'validating shard {training_progress.shard}')
-
-            score = validate(state_tracker['model'], 
-                    valid_set, 
-                    config, 
-                    state_tracker['training_progress'],
-                    **kwargs)
-
-            training_progress.shard_done()
-
-            torch.cuda.synchronize()
-            dist.barrier()
-            if rank == 0:
-                state_tracker.save()
-
-            if 'preempt_callback' in kwargs:
-                kwargs['preempt_callback'](state_tracker, score, config, **kwargs)
-
-        training_progress.epoch_done()
+    with display.start_training() as train_bar:
+        while(training_progress.epoch < num_epochs):
+            score = train_epoch(model, train_set, valid_set, num_shards, training_progress, config, state_tracker,
+                    preempt_callback=preempt_callback, **kwargs)
 
     if 'hparam_callback' in kwargs and rank == 0:
         kwargs['hparam_callback'](kwargs['metriclogger'], score)
@@ -466,7 +516,7 @@ def training_worker(rank, config, progress, debug, args, kwargs):
     display = Display(show_progress=progress, rank=rank)
     metriclogger = MetricLogger(config, rank)
 
-    logger.info(f'starting run with name: {config["name"]}')
+    logger.info(f'starting run with training_run_id: {config["training_run_id"]}')
     train(config, 
             *args,
             display=display, 
@@ -482,21 +532,43 @@ def training_worker(rank, config, progress, debug, args, kwargs):
     dist.destroy_process_group()
 
 
-def build_config(config_id: str, args=None):
-    ''' config id can be arbitrary, but must be unique in the config/training run store '''
+def build_config(config_args, *args, **kwargs):
+    ''' 
+    train_run_id can be arbitrary, but must be unique in the config/training run store 
+    for simplicity, just set to timestamp for now
+    '''
+    training_run_id = str(ceil(time()))
+    config = TrainingConfig()
+
+    # this will need to be parallelism safe in future
+    with config_args.config_file as f:
+        config_candidate = yaml.safe_load(f)
+        config_candidate['training_run_id'] = training_run_id
+
+    if config_args.batch_size is not None:
+        config_candidate['batch_size'] = config_args.batch_size
+
+    if config_args.max_checkpoints is not None:
+        config_candidate['max_checkpoints'] = config_args.max_checkpoints
+
+    config.parse_from_dict(config_candidate)
+    config.check()
+    config.final()
+
+    return config
+
+def load_config(training_run_id: str, *args, **kwargs):
+    raise NotImplemented
+    ''' 
+    train_run_id can be arbitrary, but must be unique in the config/training run store 
+    for simplicity, just set to timestamp for now
+    '''
     config = TrainingConfig()
 
     # this will need to be parallelism safe in future
     with args.config_file as f:
         config_candidate = yaml.safe_load(f)
-
-    if args.name is not None:
-        if args.debug == True:
-            prefix = 'debug'
-        else: 
-            prefix = 'run'
-            
-        config_candidate['name'] = f'{prefix}_{args.name}_t0_utc{config_id}'
+        config_candidate['training_run_id'] = training_run_id
 
     if args.batch_size is not None:
         config_candidate['batch_size'] = args.batch_size
@@ -510,18 +582,23 @@ def build_config(config_id: str, args=None):
 
     return config
 
+def run_workers(config, *args, **kwargs):
+    # rng has to be inited before spawning
+    # because multiprocessing requires different worker ids
+    # that might be created randomly
+    rng_init(seed=config['seed'], deterministic=False)
 
-def main(argv, *args, **kwargs):
-    cli_args = parse_args(argv)
-
-    timestamp = str(ceil(time()))
-    config = build_config(config_id=timestamp, args=cli_args)
-    rng_init(seed=config['seed'])
-
-    #mp.set_start_method('spawn')
     mp.spawn(training_worker, 
-            args=(config, cli_args.progress, cli_args.debug, args, kwargs),
+            args=(config, kwargs.get('progress', True), kwargs.get('debug', False), args, kwargs),
             nprocs = config['num_gpus'],
             join=True)
 
 
+def train_start(config_args, *args, **kwargs):
+    config = build_config(config_args, *args, **kwargs)
+    run_workers(config, *args, debug=config_args.debug, **kwargs)
+
+
+def train_resume(*args, **kwargs):
+    config = load_config(training_run_id=timestamp, *args, **kwargs)
+    run_workers(config, *args, **kwargs)

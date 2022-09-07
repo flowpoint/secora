@@ -10,10 +10,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.distributed as dist
 
-#from tqdm import tqdm
+from functools import partial
 
 from secora.losses import mrr
-from secora.data import deviceloader, LANGUAGES, get_loader
+from secora.data import batch_to_device, LANGUAGES, get_loader
 
 
 def build_embedding_space(model, data_loader, embedding_size, feature_prefix='', device='cpu', output_device='cpu', **kwargs):
@@ -21,15 +21,18 @@ def build_embedding_space(model, data_loader, embedding_size, feature_prefix='',
     the embedding space is collected on the output_device
     '''
 
-    display = kwargs['display']
+    display = kwargs.get('display', None)
 
     batch_size = data_loader.batch_size
     dataset_shape = (len(data_loader)*batch_size, embedding_size)
     # allocate the dataset_embedding
     embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=output_device)
-    display.start_embedding(len(data_loader), feature_prefix)
+    #with display.start_embedding(feature_prefix) as embedding_bar: 
+    if display is not None:
+        embedding_bar = display.start_embedding(feature_prefix)
 
-    for i, batch in enumerate(deviceloader(data_loader, device)):
+    for i, batch in enumerate(map(partial(batch_to_device, device), data_loader)):
+
         model_inputs = (
                 batch[feature_prefix + 'input_ids'], 
                 batch[feature_prefix + 'attention_mask'])
@@ -39,7 +42,8 @@ def build_embedding_space(model, data_loader, embedding_size, feature_prefix='',
 
         sample_embedding = model(*model_inputs)
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach().to(output_device)
-        display.step_embedding()
+        if display is not None:
+            embedding_bar.update()
 
     return embedding_space
 

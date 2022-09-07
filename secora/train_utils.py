@@ -6,7 +6,7 @@ import random
 
 import grad_cache.functional
 
-def rng_init(seed, deterministic=True):
+def rng_init(seed, deterministic=False):
     torch.cuda.empty_cache()
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

@@ -15,7 +15,7 @@ from tracking import make_logger
 from config import load_config, overwrite_config
 import numpy as np
 import datetime
-from train import train
+from secora.train import *
 
 from copy import deepcopy
 
@@ -48,7 +48,7 @@ def hyperopt_worker(rank, default_config, progress, debug):
         #overwrite config values with search hyperparameters
         t = trial.number
         config = deepcopy(default_config)
-        config['name'] = default_config['name'] + f"_{t}"
+        config['training_run_id'] = default_config['name'] + f"_{t}"
 
         config['learning_rate'] = trial.suggest_uniform('learning_rate', 1e-6, 1e-4)
         config['dropout'] = trial.suggest_uniform('dropout', 0.05, 0.3)
@@ -161,7 +161,6 @@ def hyperopt_worker(rank, default_config, progress, debug):
     dist.destroy_process_group()
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='hyperparam search')
     parser.add_argument('config_path', type=str)
@@ -191,3 +190,15 @@ if __name__ == "__main__":
             nprocs = config['num_gpus'],
             join=True)
 
+def main(argv, *args, **kwargs):
+    cli_args = parse_args(argv)
+
+    timestamp = str(ceil(time()))
+    config = build_config(training_run_id=timestamp, args=cli_args)
+    rng_init(seed=config['seed'])
+
+    #mp.set_start_method('spawn')
+    mp.spawn(training_worker, 
+            args=(config, cli_args.progress, cli_args.debug, args, kwargs),
+            nprocs = config['num_gpus'],
+            join=True)
