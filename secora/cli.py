@@ -24,6 +24,9 @@ def main(argv):
     start_parser.add_argument('--max_checkpoints', type=int, default=None) 
     start_parser.add_argument('--debug', action='store_true', default=False)
     start_parser.add_argument('--progress', action='store_true', default=False)
+    start_parser.add_argument('--deterministic', action='store_true', default=False)
+
+    # set the training main function to call
     start_parser.set_defaults(func=train_start)
 
 

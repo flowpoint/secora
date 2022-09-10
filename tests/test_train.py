@@ -30,19 +30,19 @@ preprocess_cores: 10
 preprocess_mode: concat
 max_input_tokens: 256
 languages:
-  - python
+  - 'all'
 
-epochs: 2
-shards: 2
+epochs: 1
+shards: 64
 warmup_batches: 10
 
-finetune_mode: all
+finetune_mode: 'all'
 
 #model_name: 'microsoft/codebert-base'
 model_name: 'distilroberta-base'
 #model_name: 'testroberta'
-optimizer: adam
-lr_schedule: constant
+optimizer: 'adam'
+lr_schedule: 'constant'
 
 learning_rate: 1e-6
 batch_size: 2

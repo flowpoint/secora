@@ -115,7 +115,7 @@ class EmbeddingModelCuda(torch.nn.Module):
 def build_model(config, **kwargs):
     ''' unified function for building a model according to config '''
     logger = kwargs['logger']
-    rank = kwargs['rank']
+    rank = kwargs.get('rank', 0)
     logger.info('building model')
 
     model_args = (BaseModel(config['model_name']), config['embedding_size'], AMP(config['amp']))

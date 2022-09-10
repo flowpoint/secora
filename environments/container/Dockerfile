@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y \
 #RUN git clone https://github.com/facebookresearch/faiss && cd faiss
 #RUN cmake -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=ON -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF -B build .
 
-RUN pip install pipenv faiss-cpu pytest pytest-xdist pytest-cov tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools onnx onnxruntime meson==0.62.2 ninja #jschon
+RUN pip install pipenv faiss-cpu pytest pytest-xdist pytest-cov tensorboard datasets ipython transformers docopt optuna torch-SM3 more_itertools onnx onnxruntime pydantic meson==0.62.2 ninja #jschon
 
 # temporarily needed bc of missing jschon py3.7 support
 RUN git clone --recursive https://github.com/flowpoint/jschon-backport.git /root/jschon-backport && cd /root/jschon-backport && python setup.py install && cd
