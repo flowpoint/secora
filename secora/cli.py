@@ -1,7 +1,7 @@
 import sys
 import argparse
 
-from secora.train import train_start
+from secora.train import train_start, train_resume
 #from secora.hyperparam_search import main
 
 
@@ -32,6 +32,9 @@ def main(argv):
 
     resume_parser = train_subparsers.add_parser('resume', help='resume')
     resume_parser.add_argument('training_run_id', type=str, default=None)
+    resume_parser.add_argument('--debug', action='store_true', default=False)
+    resume_parser.add_argument('--storage_path', type=str, default=None)
+    resume_parser.set_defaults(func=train_resume)
 
     cli_args = secora_parser.parse_args(argv[1:])
     cli_args.func(cli_args)

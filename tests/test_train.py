@@ -1,4 +1,5 @@
 import pytest
+
 import torch
 
 from secora.models import *
@@ -54,6 +55,7 @@ grad_clip: 0.0
 
 embedding_size: 2
 top_k:  2 #1000
+deterministic: True
 '''
 
 @pytest.fixture

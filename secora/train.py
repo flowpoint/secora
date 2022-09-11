@@ -1,4 +1,5 @@
 import sys
+import os
 from time import time, sleep
 from enum import Enum, auto
 from math import ceil
@@ -102,10 +103,10 @@ class TrainingConfig(SimpleConfig):
             TrainingRunIDSetting('training_run_id'),
             IntSetting('num_gpus', lb=0),
             BoolSetting('cuda_graphs'),
+            BoolSetting('deterministic'),
             IntSetting('embedding_size', lb=0),
             FloatSetting('grad_clip', lb=0.),
             DirectorySetting('logdir'),
-            DirectorySetting('checkpoint_dir')
             ]
 
         for s in setts:
@@ -413,7 +414,13 @@ def build_scheduler(optim, config, train_set_len, **kwargs):
     return scheduler
 
 
-def train(config, *args, preempt_callback=None, cache=True, **kwargs):
+def train(
+        config,
+        resume,
+        *args, 
+        preempt_callback=None, 
+        cache=True, 
+        **kwargs):
     rank = kwargs['rank']
     torch.autograd.set_detect_anomaly(kwargs.get('debug', False))
     logger = kwargs['logger']
@@ -477,11 +484,13 @@ def train(config, *args, preempt_callback=None, cache=True, **kwargs):
         num_epochs = 2
         num_shards = 2
     else:
-        # load latest checkpoint 
-        # resume by default
-        torch.cuda.synchronize()
-        dist.barrier()
-        state_tracker.load_latest()
+        if resume == True:
+            # load latest checkpoint 
+            # resume by default
+            torch.cuda.synchronize()
+            dist.barrier()
+            state_tracker.load_latest()
+
 
         num_epochs = config['epochs']
         num_shards = config['shards']
@@ -517,7 +526,7 @@ def train(config, *args, preempt_callback=None, cache=True, **kwargs):
     #return torch.tensor([1.])#state_tracker
 
 
-def training_worker(rank, return_values, config, progress, args, kwargs):
+def training_worker(rank, return_values, config, resume, progress, args, kwargs):
     world_size = config['num_gpus']
     debug = kwargs.get('debug', False)
 
@@ -536,6 +545,7 @@ def training_worker(rank, return_values, config, progress, args, kwargs):
     kwargs['debug'] = debug
 
     result = train(config, 
+            resume,
             *args,
             display=display, 
             metriclogger=metriclogger, 
@@ -565,24 +575,23 @@ def build_config(config_candidate, *args, **kwargs):
     return config
 
 
-def load_config(training_run_id: str, *args, **kwargs):
-    raise NotImplemented
+def load_config(resume_args, *args, **kwargs):
     ''' 
     train_run_id can be arbitrary, but must be unique in the config/training run store 
     for simplicity, just set to timestamp for now
     '''
+
+    training_run_id = resume_args.training_run_id
+
     config = TrainingConfig()
 
+    storage_path = kwargs['storage_path']
+    if storage_path is None:
+        storage_path = '~/secora_output'
+
     # this will need to be parallelism safe in future
-    with args.config_file as f:
-        config_candidate = yaml.safe_load(f)
-        config_candidate['training_run_id'] = training_run_id
-
-    if args.batch_size is not None:
-        config_candidate['batch_size'] = args.batch_size
-
-    if args.max_checkpoints is not None:
-        config_candidate['max_checkpoints'] = args.max_checkpoints
+    with open(os.path.join(storage_path, training_run_id, 'config.yml'), 'r') as f:
+        config_candidate = yaml.safe_load(f) 
 
     config.parse_from_dict(config_candidate)
     config.check()
@@ -591,16 +600,20 @@ def load_config(training_run_id: str, *args, **kwargs):
     return config
 
 
-def run_workers(config, *args, **kwargs):
+def run_workers(config, resume, *args, **kwargs):
     # rng has to be inited before spawning
     # because multiprocessing requires different worker ids
     # that might be created randomly
+    if kwargs['debug'] == True and config['deterministic'] == True:
+        print('warning, debug nondeterministic run')
+
     rng_init(seed=config['seed'], deterministic=kwargs.get('deterministic', False))
+
 
     mp.set_start_method('spawn', force=True)
     return_values = mp.SimpleQueue()
     ctx = mp.spawn(training_worker, 
-            args=(return_values, config, kwargs.get('progress', True), args, kwargs),
+            args=(return_values, config, resume, kwargs.get('progress', True), args, kwargs),
             nprocs = config['num_gpus'],
             join=True)
 
@@ -629,14 +642,26 @@ def train_start(config_args, *args, **kwargs):
     if config_args.max_checkpoints is not None:
         config_candidate['max_checkpoints'] = config_args.max_checkpoints
 
+    config_candidate['deterministic'] = config_args.deterministic
+
     config = build_config(config_candidate, *args, **kwargs)
 
     kwargs['debug'] = config_args.debug
-    r = run_workers(config, *args, **kwargs)
+    r = run_workers(config, resume=False, *args, **kwargs)
 
     return r
 
 
-def train_resume(*args, **kwargs):
-    config = load_config(training_run_id=timestamp, *args, **kwargs)
-    run_workers(config, *args, **kwargs)
+def train_resume(resume_args, *args, **kwargs):
+    # run state_url is the path/url where the run state to be resumed resides
+    config = load_config(
+            resume_args, 
+            *args, 
+            storage_path=resume_args.storage_path, 
+            **kwargs)
+    run_workers(
+            config, 
+            resume=True, 
+            *args, 
+            debug=resume_args.debug, 
+            **kwargs)

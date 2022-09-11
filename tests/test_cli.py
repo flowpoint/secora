@@ -1,5 +1,6 @@
 import pytest
 
+import os
 import tempfile
 import yaml
 
@@ -40,6 +41,30 @@ def load_main_state(config, **kwargs):
 
 @pytest.mark.slow
 @pytest.mark.cuda
+def test_train_main_progress():
+    # wether trainable params have actually changed
+    with tempfile.NamedTemporaryFile('w') as tmpconf:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            example_config_yaml = yaml.safe_load(example_config)
+            example_config_yaml['logdir'] = tmpdirname
+            example_config_yaml['checkpoint_dir'] = tmpdirname
+            yaml.safe_dump(example_config_yaml, tmpconf)
+
+            testargs = ['/root/secora/secora/cli.py', 'train', 'start' ,tmpconf.name, '--debug', '--deterministic']
+            state_tracker0  = load_main_state(build_config(example_config_yaml))
+            main(testargs)
+            state_tracker1  = load_main_state(build_config(example_config_yaml))
+
+    s0 = state_tracker0['model'].state_dict() 
+    s1 = state_tracker1['model'].state_dict() 
+
+    for (x, xv), (y, yv) in zip(s0.items(), s1.items()):
+        if xv.requires_grad == True:
+            assert not torch.equal(xv, yv), f"model param werent updated during training: {x} {y} : {xv} {yv}"
+
+
+@pytest.mark.slow
+@pytest.mark.cuda
 def test_train_main_determinism():
     with tempfile.NamedTemporaryFile('w') as tmpconf:
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -50,7 +75,6 @@ def test_train_main_determinism():
 
             testargs = ['/root/secora/secora/cli.py', 'train', 'start' ,tmpconf.name, '--debug', '--deterministic']
             main(testargs)
-            #state_tracker1 = main(testargs)[0]['result']#, logger=MockLogger())
             state_tracker1  = load_main_state(build_config(example_config_yaml))
 
     # start a exactly similarly configured run
@@ -64,14 +88,52 @@ def test_train_main_determinism():
 
             testargs = ['/root/secora/secora/cli.py', 'train', 'start', tmpconf.name, '--debug', '--deterministic']
             main(testargs)
-            #state_tracker2 = main(testargs)[0]['result']#, logger=MockLogger())
             state_tracker2  = load_main_state(build_config(example_config_yaml))
 
 
     s1 = state_tracker1['model'].state_dict() 
     s2 = state_tracker2['model'].state_dict()
 
-    #assert all([torch.all(torch.eq(x,y)) for x,y in zip(s1.values(), s2.values())])
     for (x, xv), (y, yv) in zip(s1.items(), s2.items()):
-        assert torch.allclose(xv,yv), f"model param differ: {x} {y} : {xv} {yv}"
-        #assert all([torch.allclose(x,y) for x,y in zip(s1.values(), s2.values())])
+        assert torch.equal(xv, yv), f"model param differ: {y} {z} : {yv} {zv}"
+
+    
+@pytest.mark.slow
+@pytest.mark.cuda
+def test_train_main_resume():
+    with tempfile.NamedTemporaryFile('w') as tmpconf:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            example_config_yaml = yaml.safe_load(example_config)
+            example_config_yaml['logdir'] = tmpdirname
+            example_config_yaml['checkpoint_dir'] = tmpdirname
+            example_config_yaml['epochs'] = 4
+            yaml.safe_dump(example_config_yaml, tmpconf)
+
+            testargs = ['/root/secora/secora/cli.py', 'train', 'start' ,tmpconf.name, '--debug', '--deterministic']
+            main(testargs)
+            state_tracker1  = load_main_state(build_config(example_config_yaml))
+
+    # start a exactly similarly configured run
+    # but in a clean logdir
+    with tempfile.NamedTemporaryFile('w') as tmpconf:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            example_config_yaml = yaml.safe_load(example_config)
+            example_config_yaml['logdir'] = tmpdirname
+            example_config_yaml['checkpoint_dir'] = tmpdirname
+            example_config_yaml['epochs'] = 2
+            yaml.safe_dump(example_config_yaml, tmpconf)
+
+            testargs = ['/root/secora/secora/cli.py', 'train', 'start' ,tmpconf.name, '--debug', '--deterministic']
+            main(testargs)
+
+            trainid = sorted(os.listdir(tmpdirname))[0]
+            testargs = ['/root/secora/secora/cli.py', 'train', 'resume', trainid, '--debug', '--storage_path', tmpdirname]
+            main(testargs)
+            state_tracker2  = load_main_state(build_config(example_config_yaml))
+
+
+    s1 = state_tracker1['model'].state_dict() 
+    s2 = state_tracker2['model'].state_dict()
+
+    for (x, xv), (y, yv), in zip(s1.items(), s2.items()):
+        assert torch.equal(xv,yv), f"model param differ: {y} {z} : {yv} {zv}"
