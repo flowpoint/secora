@@ -149,13 +149,6 @@ def train_step(
     model = state_tracker['model']
     rank = kwargs['rank']
 
-    '''
-    for b in deviceloader(train_loader, rank):
-        return torch.tensor([1.]).to(rank), False
-
-    return torch.tensor([1.]).to(rank), True
-    '''
-
     model.train()
 
     cache = GCache()
@@ -183,11 +176,11 @@ def train_step(
             # cant complete the last shard optimizer step with the set batchsize
             return step_loss, True
 
-
         
         should_break = should_optimize(step, config)
 
         model_inputs = batch['input_ids'], batch['attention_mask']
+
         with torch.no_grad():
             emb1 = forward_1(*model_inputs)
         emb2 = forward_2(*model_inputs)
@@ -222,7 +215,7 @@ def train_step(
         optimize()
 
     scheduler.step()
-    training_progress.optimizer_step += 1
+    training_progress.step_done()# += 1
 
     return step_loss, False
 
@@ -249,35 +242,40 @@ def train_shard(
 
     shard_iter = iter(map(partial(batch_to_device, rank), train_loader))
 
-    with display.start_shard() as step_bar:
-        while shard_done == False:
-            loss, shard_done = train_step(
-                    shard_iter,
-                    state_tracker,
-                    config, 
-                    **kwargs)
+    display.start_shard() 
+    global_step = training_progress.epoch*training_progress.shard*training_progress.step
 
-            logger.debug(f'step {shard_step}')
+    while shard_done == False:
+        loss, shard_done = train_step(
+                shard_iter,
+                state_tracker,
+                config, 
+                **kwargs)
 
-            step_bar.update(config['grad_accum']*config['grad_cache']*config['batch_size'])
-            shard_step += 1
+        logger.debug(f'step {shard_step}')
 
-            if rank == 0:
-                metriclogger.add_scalar(
-                        "learning_rate/train", 
-                        scheduler.get_last_lr()[0], 
-                        training_progress.optimizer_step)
-                metriclogger.flush()
+        #step_bar.update(config['grad_accum']*config['grad_cache']*config['batch_size'])
+        display.update(training_progress)
+        shard_step += 1
 
-            shard_loss.add_(loss.detach())
-            shard_step += 1
+        if rank == 0:
+            metriclogger.add_scalar(
+                    "learning_rate/train", 
+                    scheduler.get_last_lr()[0], 
+                    global_step)
+            metriclogger.flush()
+
+        shard_loss.add_(loss.detach())
+        shard_step += 1
 
     dist.all_reduce(shard_loss)
     torch.cuda.synchronize()
     dist.barrier()
     if rank == 0:
         avg_loss = shard_loss.cpu().numpy() / shard_step
-        metriclogger.add_scalar("avg_loss/train", avg_loss, training_progress.optimizer_step)
+        metriclogger.add_scalar("avg_loss/train", 
+                avg_loss, 
+                global_step)
         metriclogger.flush()
 
 
@@ -290,43 +288,43 @@ def train_epoch(model, train_set, valid_set, num_shards, training_progress, conf
     train_set.shuffle()
 
 
-    with display.start_epoch() as shard_bar:
-        while(training_progress.shard < num_shards):
-            logger.info(f'training shard: {training_progress.shard}')
+    display.start_epoch()
+    while(training_progress.shard < num_shards):
+        logger.info(f'training shard: {training_progress.shard}')
 
-            shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
-            train_loader = get_loader(shard, config['batch_size'])
+        shard = train_set.shard(num_shards, training_progress.shard, contiguous=True)
+        train_loader = get_loader(shard, config['batch_size'])
 
-            train_shard(
-                state_tracker,
-                train_loader,
-                config,
-                **kwargs
-                )
+        train_shard(
+            state_tracker,
+            train_loader,
+            config,
+            **kwargs
+            )
 
-            logger.info(f'validating shard {training_progress.shard}')
+        logger.info(f'validating shard {training_progress.shard}')
 
-            score = 0.
-            score = validate(state_tracker['model'], 
-                    valid_set, 
-                    config, 
-                    state_tracker['training_progress'],
-                    **kwargs)
+        score = 0.
+        score = validate(state_tracker['model'], 
+                valid_set, 
+                config, 
+                state_tracker['training_progress'],
+                **kwargs)
 
-            training_progress.shard_done()
+        training_progress.shard_done()
 
-            torch.cuda.synchronize()
-            dist.barrier()
-            if rank == 0:
-                state_tracker.save()
+        torch.cuda.synchronize()
+        dist.barrier()
+        if rank == 0:
+            state_tracker.save()
 
-            shard_bar.update()
+        #shard_bar.update()
 
-            preempt_callback = kwargs.get('preempt_callback', None)
-            if preempt_callback is not None:
-                if not callable(preempt_callback):
-                    raise RuntimeError(f'preempt_callback has to be callable but was {preempt_callback}')
-                preempt_callback(state_tracker, score, config, **kwargs)
+        preempt_callback = kwargs.get('preempt_callback', None)
+        if preempt_callback is not None:
+            if not callable(preempt_callback):
+                raise RuntimeError(f'preempt_callback has to be callable but was {preempt_callback}')
+            preempt_callback(state_tracker, score, config, **kwargs)
 
 
     training_progress.epoch_done()
@@ -368,6 +366,7 @@ def hw_optimize(model, **kwargs):
         model.make_graphed(model_inputs)
         torch.cuda.synchronize()
         dist.barrier()
+
 
 def distribute_model(model, **kwargs):
     ''' 
@@ -428,7 +427,7 @@ def train(
         t_limit = 20*config['grad_accum']*config['batch_size']
         v_limit = 20*config['grad_accum']*config['batch_size']
     else:
-        t_limit = v_limit = 1000 #None
+        t_limit = v_limit = 10000
 
 
     # training blocks
@@ -511,12 +510,14 @@ def train(
             **kwargs)
     '''
 
-    with display.start_training() as train_bar:
-        while(training_progress.epoch < num_epochs):
-            score = train_epoch(model, train_set, valid_set, num_shards, training_progress, config, state_tracker,
-                    preempt_callback=preempt_callback, **kwargs)
+    display.start_training()
+    while(training_progress.epoch < num_epochs):
+        score = train_epoch(model, train_set, valid_set, num_shards, training_progress, config, state_tracker,
+                preempt_callback=preempt_callback, **kwargs)
 
-            train_bar.update()
+    display.close()
+
+            #train_bar.update()
 
     if 'hparam_callback' in kwargs and rank == 0:
         kwargs['hparam_callback'](kwargs['metriclogger'], score, rank, config)

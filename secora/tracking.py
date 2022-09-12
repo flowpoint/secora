@@ -141,22 +141,26 @@ class TrainingProgress:
     # epoch -1 means warmup
     epoch: int = 0
     shard: int = 0 
-    optimizer_step: int = 0 
+    step: int = 0 
 
     def state_dict(self,):
         return { "epoch": self.epoch, 
             "shard": self.shard,
-            "optimizer_step": self.optimizer_step
+            "step": self.step
             }
 
     def load_state_dict(self, state):
         self.epoch = state['epoch']
         self.shard = state['shard']
-        self.optimizer_step = state['optimizer_step']
-
-    def shard_done(self):
-        self.shard += 1
+        self.optimizer_step = state['step']
 
     def epoch_done(self):
         self.shard = 0
         self.epoch += 1
+
+    def shard_done(self):
+        self.step = 0
+        self.shard += 1
+
+    def step_done(self):
+        self.step += 1

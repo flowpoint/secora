@@ -29,7 +29,7 @@ def build_embedding_space(model, data_loader, embedding_size, feature_prefix='',
     embedding_space = torch.zeros(dataset_shape, dtype=torch.float32, device=output_device)
     #with display.start_embedding(feature_prefix) as embedding_bar: 
     if display is not None:
-        embedding_bar = display.start_embedding(feature_prefix)
+        display.start_embedding()
 
     for i, batch in enumerate(map(partial(batch_to_device, device), data_loader)):
 
@@ -43,7 +43,7 @@ def build_embedding_space(model, data_loader, embedding_size, feature_prefix='',
         sample_embedding = model(*model_inputs)
         embedding_space[i*batch_size:(i+1)*batch_size] = sample_embedding.detach().to(output_device)
         if display is not None:
-            embedding_bar.update()
+            display.update(embedding_step=i)
 
     return embedding_space
 
