@@ -20,5 +20,9 @@ class MetricLogger:
     def add_embedding(self, *args, **kwargs):
         self.writer.add_embedding(*args,**kwargs)
 
+    def add_hparams(self, *args, **kwargs):
+        self.writer.add_hparams(*args, **kwargs)
+        self.writer.flush()
+
     def flush(self, *args, **kwargs):
         self.writer.flush(*args, **kwargs)

@@ -307,13 +307,11 @@ def train_epoch(model, train_set, valid_set, num_shards, training_progress, conf
             logger.info(f'validating shard {training_progress.shard}')
 
             score = 0.
-            '''
             score = validate(state_tracker['model'], 
                     valid_set, 
                     config, 
                     state_tracker['training_progress'],
                     **kwargs)
-                    '''
 
             training_progress.shard_done()
 
@@ -419,7 +417,7 @@ def train(
         resume,
         *args, 
         preempt_callback=None, 
-        cache=True, 
+        cache=False, 
         **kwargs):
     rank = kwargs['rank']
     torch.autograd.set_detect_anomaly(kwargs.get('debug', False))
@@ -430,29 +428,30 @@ def train(
         t_limit = 20*config['grad_accum']*config['batch_size']
         v_limit = 20*config['grad_accum']*config['batch_size']
     else:
-        t_limit = v_limit = None
+        t_limit = v_limit = 1000 #None
 
 
     # training blocks
 
     logger.info('started preprocessing splits')
     # data
-    if cache:
-        train_path =  '/tmp/secora_ds/train_set'
+    train_path =  '/tmp/secora_ds/train_set'
+    if cache == True:
         if os.path.exists(train_path):
             train_set = load_from_disk(train_path)
             train_set.set_format(type='torch', columns=list(set(train_set.column_names) - {'url','language'}), output_all_columns=True)
-        else:
-            train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
-            train_set.save_to_disk(dataset_path=train_path)
+    else:
+        train_set = preprocess_split(data.DataSplit.TRAIN, config, limit_samples=t_limit, **kwargs)
+        train_set.save_to_disk(dataset_path=train_path)
 
-        valid_path =  '/tmp/secora_ds/valid_set'
+    valid_path =  '/tmp/secora_ds/valid_set'
+    if cache == True:
         if os.path.exists(valid_path):
             valid_set = load_from_disk(valid_path)
             valid_set.set_format(type='torch', columns=list(set(valid_set.column_names) - {'url','language'}), output_all_columns=True)
-        else:
-            valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
-            valid_set.save_to_disk(dataset_path=valid_path)
+    else:
+        valid_set = preprocess_split(data.DataSplit.VALIDATION, config, limit_samples=v_limit, **kwargs)
+        valid_set.save_to_disk(dataset_path=valid_path)
 
 
     logger.info(f'finished preprocessing splits with train_len: {len(train_set)} valid_len: {len(valid_set)}')
@@ -520,9 +519,9 @@ def train(
             train_bar.update()
 
     if 'hparam_callback' in kwargs and rank == 0:
-        kwargs['hparam_callback'](kwargs['metriclogger'], score)
+        kwargs['hparam_callback'](kwargs['metriclogger'], score, rank, config)
 
-    return state_tracker
+    return score
     #return torch.tensor([1.])#state_tracker
 
 
@@ -543,6 +542,7 @@ def training_worker(rank, return_values, config, resume, progress, args, kwargs)
     logger.info(f'starting run with training_run_id: {config["training_run_id"]}')
 
     kwargs['debug'] = debug
+    logger.info('running debug mode')
 
     result = train(config, 
             resume,
@@ -561,7 +561,7 @@ def training_worker(rank, return_values, config, resume, progress, args, kwargs)
     dist.barrier(group=dist.group.WORLD)
 
     #return_values.put({"rank": rank, "result": result})
-    return_values.put({"rank": rank, "result": 'test'})
+    return_values.put({"rank": rank, "result": result})
         
     dist.destroy_process_group()
 

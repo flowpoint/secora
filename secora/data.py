@@ -41,9 +41,22 @@ class LanguageSetting(Setting):
         return val_list == ['all'] or all([x in LANGUAGES for x in val_list])
 
 
-class PreprocessMode(Enum):
-    CONCAT = 'concat'
+# workaround to fix hf dataset caching
+# until dill fixes enum serialization
+# see https://github.com/uqfoundation/dill/issues/250o# https://github.com/huggingface/datasets/issues/2643
 
+# hardcoding mode concat
+
+class PreprocessMode:
+    CONCAT = 'concat'
+    def __init__(self, v, *args, **kwargs):
+        self.value = v
+
+    def __str__(self):
+        return str(self.value)
+
+#class PreprocessMode(Enum):
+#    CONCAT = 'concat'
 
 class DataSplit(Enum):
     TRAIN = 'train'
@@ -94,7 +107,8 @@ def tokenize_train_sample(tokenizer, sample, mode, max_input_tokens):
     doc = " ".join(sample['func_documentation_tokens'])
     code = " ".join(sample['func_code_tokens'])
 
-    if mode is PreprocessMode.CONCAT:
+    #if mode is PreprocessMode.CONCAT:
+    if True:
         trunc_sample = _fair_truncate(tokenizer, doc, code, max_input_tokens)
         tokenized_sample = tokenizer(trunc_sample, padding='max_length', max_length=max_input_tokens, truncation=True)
     else:

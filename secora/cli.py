@@ -2,7 +2,7 @@ import sys
 import argparse
 
 from secora.train import train_start, train_resume
-#from secora.hyperparam_search import main
+from secora.hyperparam_search import hyperparam_search
 
 
 def main(argv):
@@ -11,6 +11,15 @@ def main(argv):
 
 
     hyperparam_search_parser = secora_subparsers.add_parser('hyperparam_search', help='hyperparam_search')
+    hyperparam_search_parser.add_argument('config_file', type=argparse.FileType('r'))
+    hyperparam_search_parser.add_argument('--db', type=str, default=None)
+    hyperparam_search_parser.add_argument('--search_name', type=str, default=None)
+    hyperparam_search_parser.add_argument('--trials', type=int, default=10)
+    hyperparam_search_parser.add_argument('--max_hparam_shards', type=int, default=32)
+    hyperparam_search_parser.add_argument('--debug', action='store_true', default=False)
+    hyperparam_search_parser.add_argument('--device', type=int, default=0)
+    hyperparam_search_parser.add_argument('--seed', type=int, default=22)
+    hyperparam_search_parser.set_defaults(func=hyperparam_search)
 
 
     train_parser = secora_subparsers.add_parser('train', help='train')
@@ -34,7 +43,9 @@ def main(argv):
     resume_parser.add_argument('training_run_id', type=str, default=None)
     resume_parser.add_argument('--debug', action='store_true', default=False)
     resume_parser.add_argument('--storage_path', type=str, default=None)
+
     resume_parser.set_defaults(func=train_resume)
+
 
     cli_args = secora_parser.parse_args(argv[1:])
     cli_args.func(cli_args)
